@@ -1,5 +1,6 @@
 import unittest
 
+from fossa.control.governor import Governor
 from fossa.settings.test_config import Config
 
 
@@ -16,7 +17,10 @@ class BaseTest(unittest.TestCase):
 
         from fossa.app import create_app
 
-        self.app = create_app(self.config)
+        # internal process not started
+        self.governor = Governor()
+
+        self.app = create_app(self.config, self.governor)
 
         self.test_client = self.app.test_client()
 
