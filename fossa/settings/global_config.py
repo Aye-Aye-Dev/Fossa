@@ -1,7 +1,6 @@
 class BaseConfig:
     DEBUG = False
-    APP_TITLE = ""
+    APP_TITLE = "Fossa"
     PREFERRED_URL_SCHEME = "https"
-    SQLALCHEMY_DATABASE_URI = ""
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
     SECRET_KEY = ""
+    HTTP_PORT = 2345
