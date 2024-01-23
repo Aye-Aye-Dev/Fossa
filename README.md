@@ -30,7 +30,7 @@ The `.env` file is used by pipenv.
 For all python commands below you will need to be in this pipenv shell.
 
 
-## Running it locally
+## Running Fossa locally
 
 In a distributed environment one instance of Fossa would run on each compute node. To experiment with Fossa just run one or more instances on a local computer.
 
@@ -56,3 +56,19 @@ python fossa/app.py
 
 You'll now have a locally running web app. It will output IP addresses it is accepting connections from. Typically just point a browser at `http://0.0.0.0:2345/'
 
+
+### Posting a task
+
+In a production environment tasks are more likely to arrive through a message queue. But it's also possible to use an HTTP POST to submit a task.
+
+If you used the `local_config_example.py` file as a starting point for your local config it will have a single model already in the `ACCEPTED_MODEL_CLASSES` parameter. This is a tiny example ETL model.
+
+Fossa will only run models that have been pre-defined before start-up. A simple way to supply these models is through the config file but there are other ways too.
+
+POST to your local instance of Fossa a task specification. This example runs the complete `SimpleExampleEtl` model-
+
+```shell
+curl --header "Content-Type: application/json" \
+     --data '{"model_class":"SimpleExampleEtl"}'  \
+     --request POST http://0.0.0.0:2345/api/0.01/task
+```

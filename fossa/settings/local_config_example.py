@@ -1,4 +1,5 @@
 from fossa.settings.global_config import BaseConfig
+from tests.simple_example_etl import SimpleExampleEtl
 
 
 class Config(BaseConfig):
@@ -8,3 +9,4 @@ class Config(BaseConfig):
 
     DEBUG = True
     PREFERRED_URL_SCHEME = "http"
+    ACCEPTED_MODEL_CLASSES = [SimpleExampleEtl]
