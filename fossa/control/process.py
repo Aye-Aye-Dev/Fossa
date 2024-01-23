@@ -11,7 +11,6 @@ class AyeAyeProcess:
     def __init__(self, task_id, work_queue, available_classes):
         """
         @param task_id: (str)
-        @param task_spec: (TaskMessage)
         @param work_queue (pipe) - to post results to
         @param available_classes (dict) - class name -> class
         """
