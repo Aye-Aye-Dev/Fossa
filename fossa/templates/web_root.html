@@ -1,6 +1,48 @@
-<head>
-  <meta charset="utf-8">
-</head>
-<body>
- <p>hello world!</p>
-</body>
+{% extends "base.html" %}
+{% block body_content %}
+
+<h1>Fossa</h1>
+
+<p><small>Execution engine for Aye-Aye ETL models</small></p>
+
+<h2>Node info</h2>
+
+<table class="table table-striped">
+  <tbody>
+  {%for key,value in node_info%}
+    <tr>
+      <th>{{key}}</th>
+      <td>{{value}}</td>
+    </tr>
+  {%endfor%}
+  </tbody>
+</table>
+
+
+<h2>Recently Completed Tasks</h2>
+{%if recent_completed_tasks %}
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th scope="col">model_class</th>
+      <th scope="col">method</th>
+      <th scope="col">method_kwargs</th>
+      <th scope="col">resolver_context</th>
+    </tr>
+  </thead>
+  <tbody>
+  {%for t in recent_completed_tasks%}
+    <tr>
+      <td>{{t.model_class}}</td>
+      <td>{{t.method}}</td>
+      <td>{{t.method_kwargs}}</td>
+      <td>{{t.resolver_context}}</td>
+    </tr>
+  {%endfor%}
+  </tbody>
+</table>
+{%else%}
+<p>This Fossa node hasn't run any tasks since it started.</p>
+{%endif%}
+
+{% endblock %}
