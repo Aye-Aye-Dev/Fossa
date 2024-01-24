@@ -24,10 +24,13 @@
 <table class="table table-striped">
   <thead>
     <tr>
-      <th scope="col">model_class</th>
-      <th scope="col">method</th>
-      <th scope="col">method_kwargs</th>
-      <th scope="col">resolver_context</th>
+      <th scope="col">Model class</th>
+      <th scope="col">Method</th>
+      <th scope="col">Method kwargs</th>
+      <th scope="col">Resolver context</th>
+      <th scope="col">Started</th>
+      <th scope="col">Finished</th>
+      <th scope="col">Results</th>
     </tr>
   </thead>
   <tbody>
@@ -37,6 +40,9 @@
       <td>{{t.method}}</td>
       <td>{{t.method_kwargs}}</td>
       <td>{{t.resolver_context}}</td>
+      <td>{{t.started}}</td>
+      <td>{{t.finished}}</td>
+      <td>{{t.results}}</td>
     </tr>
   {%endfor%}
   </tbody>

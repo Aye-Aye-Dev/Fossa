@@ -5,4 +5,4 @@ class TestWeb(BaseTest):
     def test_empty_root(self):
         resp = self.test_client.get("/")
         self.assertEqual(200, resp.status_code)
-        self.assertIn("hello world", str(resp.data))
+        self.assertIn("Fossa", str(resp.data))

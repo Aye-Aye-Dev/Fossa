@@ -1,8 +1,9 @@
 import time
 
-from tests.base import BaseTest
+from fossa.control.message import TaskMessage, TerminateMessage
 
-from fossa.control.message import TerminateMessage
+from tests.base import BaseTest
+from tests.simple_example_etl import SimpleExampleEtl
 
 
 class TestGovernor(BaseTest):
@@ -36,3 +37,30 @@ class TestGovernor(BaseTest):
 
         msg = "Capacity should have been adjusted to fit CPUs etc. of executing node"
         self.assertGreater(capacity_observed, 0, msg)
+
+    def test_no_duplicates_set_accepted_class(self):
+        self.governor.set_accepted_class(SimpleExampleEtl)
+        with self.assertRaises(ValueError) as context:
+            self.governor.set_accepted_class(SimpleExampleEtl)
+
+        self.assertIn("already exists as an accepted class", str(context.exception))
+
+    def test_submit_task(self):
+        task_spec = TaskMessage(
+            model_class="SimpleExampleEtl",
+            method="go",
+            method_kwargs={},
+            resolver_context={},
+            on_completion_callback=None,
+        )
+
+        with self.assertRaises(ValueError) as context:
+            self.governor.submit_task(task_spec)
+
+        self.assertIn("not in the list of accepted classes", str(context.exception))
+
+        self.governor.set_accepted_class(SimpleExampleEtl)
+
+        msg = "Should be allowed now"
+        governor_id = self.governor.submit_task(task_spec)
+        self.assertIsNotNone(governor_id, msg)

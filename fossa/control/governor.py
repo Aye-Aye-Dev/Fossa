@@ -1,3 +1,5 @@
+from datetime import datetime
+from inspect import isclass
 import multiprocessing
 from multiprocessing.sharedctypes import Value
 import os
@@ -8,6 +10,10 @@ from ayeaye.runtime.knowledge import RuntimeKnowledge
 
 from fossa.control.message import TaskMessage, ResultsMessage, TerminateMessage
 from fossa.control.process import AyeAyeProcess
+
+
+class InvalidTaskSpec(ValueError):
+    pass
 
 
 class Governor:
@@ -44,6 +50,10 @@ class Governor:
         # override CPU based default
         # self.runtime.max_concurrent_tasks = 1
 
+        # key (str) is the name of the class (e.g. cls.__name__), value is the class itself.
+        # For security reasons, models not in the list aren't permitted
+        self.accepted_classes = {}
+
     @property
     def has_processing_capacity(self):
         """
@@ -69,6 +79,7 @@ class Governor:
             "previous_tasks": self.previous_tasks,
             "runtime": self.runtime,
             "available_processing_capacity": self.available_processing_capacity,
+            "available_classes": self.accepted_classes,
         }
 
         governor_proc = multiprocessing.Process(target=Governor.run_forever, kwargs=pkwargs)
@@ -91,6 +102,7 @@ class Governor:
         previous_tasks,
         runtime,
         available_processing_capacity,
+        available_classes,
     ):
         """
         The governor's own worker process. It manages running tasks and the communication with task
@@ -121,15 +133,20 @@ class Governor:
                 ayeaye_proc_wrapper = AyeAyeProcess(
                     task_id=proc_id,
                     work_queue=work_queue_submit,
+                    available_classes=available_classes,
                 )
 
                 process_table[proc_id] = {
                     "task_spec": task_spec,
                     "wrapped_process": ayeaye_proc_wrapper,
+                    "started": datetime.utcnow(),
                 }
 
                 # run the process. It put's results onto the work_queue when it's done.
-                ayeaye_proc = multiprocessing.Process(target=ayeaye_proc_wrapper)
+                ayeaye_proc = multiprocessing.Process(
+                    target=ayeaye_proc_wrapper,
+                    kwargs={"task_spec": task_spec},
+                )
                 ayeaye_proc.start()
 
             elif isinstance(work_spec, ResultsMessage):
@@ -138,10 +155,12 @@ class Governor:
 
                 task_id = result_spec.task_id
                 process_details = process_table.get(task_id)
-
                 if process_details is None:
                     cls.log(f"Unknown task id [{task_id}], skipping callback", level="ERROR")
                     continue
+
+                process_details["finished"] = datetime.utcnow()
+                process_details["result_spec"] = result_spec
 
                 # These are the details of the task from before processing
                 task_spec = process_details["task_spec"]
@@ -152,11 +171,38 @@ class Governor:
                 # Remove from processing table but keep a log of finished tasks
                 previous_tasks.append(process_details)
                 del process_table[task_id]
+
             elif isinstance(work_spec, TerminateMessage):
                 cls.log("Received termination message, ending now")
                 return
             else:
                 cls.log("Unknown message type received and ignored", level="ERROR")
+
+    def set_accepted_class(self, model_cls):
+        """
+        For security reasons a Fossa compute node must be configured in advance with the models
+        it is permitted to run.
+
+        If multiple models with the same name are supplied, an error will be returned.
+
+        :meth:`submit_task` is passed a `task_spec` that names the model class. That name must
+        match that from `model_cls.__name__`.
+
+        @param model_cls: (class, not instance of class)
+        """
+        if not isclass(model_cls):
+            msg = "model_class passed to Governor.set_accepted_class must be a class, not object"
+            raise ValueError(msg)
+
+        model_name = model_cls.__name__
+        if model_name in self.accepted_classes:
+            msg = (
+                f"{model_name} already exists as an accepted class. This could be a different "
+                "class with the same name."
+            )
+            raise ValueError(msg)
+
+        self.accepted_classes[model_name] = model_cls
 
     def submit_task(self, task_spec):
         """
@@ -168,6 +214,10 @@ class Governor:
         """
         if not isinstance(task_spec, TaskMessage):
             raise ValueError("task_spec must be of type TaskMessage")
+
+        if task_spec.model_class not in self.accepted_classes:
+            msg = f"Model class '{task_spec.model_class}' is not in the list of accepted classes."
+            raise InvalidTaskSpec(msg)
 
         self._work_queue_submit.send(task_spec)
         return self.governor_id

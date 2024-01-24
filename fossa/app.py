@@ -45,10 +45,15 @@ def run_local_app():
     Run app locally just for development, don't use this in production.
     """
     governor = Governor()
-    governor.start_internal_process()
 
     settings = "fossa.settings.local_config.Config"
     app = create_app(settings, governor)
+
+    for model_cls in app.config["ACCEPTED_MODEL_CLASSES"]:
+        governor.set_accepted_class(model_cls)
+
+    governor.start_internal_process()
+
     app.run(
         debug=app.config["DEBUG"],
         host="0.0.0.0",
