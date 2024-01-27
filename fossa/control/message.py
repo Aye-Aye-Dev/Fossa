@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 
 class AbstractMessage:
@@ -14,6 +14,7 @@ class TaskMessage(AbstractMessage):
     method_kwargs: dict
     resolver_context: dict
     on_completion_callback: Callable
+    task_id: Optional[str] = None
 
 
 @dataclass

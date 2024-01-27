@@ -8,8 +8,9 @@ import string
 
 from ayeaye.runtime.knowledge import RuntimeKnowledge
 
+from fossa.control.broker import AbstractMycorrhiza
 from fossa.control.message import TaskMessage, ResultsMessage, TerminateMessage
-from fossa.control.process import AyeAyeProcess
+from fossa.control.process import LocalAyeAyeProcessor
 
 
 class InvalidTaskSpec(ValueError):
@@ -23,12 +24,24 @@ class Governor:
 
     print_to_stdout = True
 
-    def __init__(self):
+    def __init__(self, isolated_processor=None):
+        """
+        @param isolated_process (subclass of :class:`AbstractIsolatedProcessor`): instance/object
+                This class has a method (`__call__`) which is run in a separate
+                :class:`multiprocessing.Process`.
+                The object is initiated before being passed so subclass specifics can be setup,
+                e.g. a connection to a message broker.
+                The :meth:`set_work_queue` will be called on `isolated_process` to connect it
+                into the processing done by the governor.
+                If not explicitly set through this constructor or through :attr:`isolated_processor`
+                the :class:`LocalAyeAyeProcess` processor will be used.
+        """
         # self.general_lock = multiprocessing.Lock()
 
         # Tasks submitted and internal tasks (e.g. process results at end of task) are put on this
-        # pipe.
-        self._work_queue_receive, self._work_queue_submit = multiprocessing.Pipe(duplex=False)
+        # queue.
+        self._task_queue_submit = multiprocessing.Queue()
+        self._task_queue_receive = multiprocessing.Queue()
 
         # Each instance of Fossa must have a single governor. Some usages (for example
         # using Flask's debug=True and a code re-loader) will cause __main__ and therefore
@@ -54,6 +67,41 @@ class Governor:
         # For security reasons, models not in the list aren't permitted
         self.accepted_classes = {}
 
+        # Can be set by construction or with :meth:`isolated_processor`
+        self._isolated_processor = isolated_processor
+
+        # @see :meth:`attach_sidecar`
+        self._sidecar_instances = []
+
+        # keep track of internal processes
+        self._internal_process_table = []
+
+    @property
+    def isolated_processor(self):
+        """
+        If not explicitly set in the constructor or the setter version of this attribute, the
+        process will default to :class:`LocalAyeAyeProcessor`.
+
+        This default processor doesn't split partitioned tasks into sub-tasks that run across
+        a distributed environment. It just runs everything in the local compute node.
+
+        @return: (subclass of :class:`AbstractIsolatedProcessor`): instance/object
+        """
+
+        if self._isolated_processor is None:
+            self._isolated_processor = LocalAyeAyeProcessor()
+
+            # connect the governor with isolated processes with a Pipe
+            self._isolated_processor.set_work_queue(self._task_queue_submit)
+
+        return self._isolated_processor
+
+    @isolated_processor.setter
+    def isolated_processor(self, processor):
+        "See doc. string in getter version of :meth:`isolated_processor`"
+        self._isolated_processor = processor
+        self._isolated_processor.set_work_queue(self._task_queue_submit)
+
     @property
     def has_processing_capacity(self):
         """
@@ -63,27 +111,61 @@ class Governor:
         """
         return self.available_processing_capacity.value > 0
 
-    def start_internal_process(self):
+    def attach_sidecar(self, sidecar):
         """
-        The internal process is a staticmethod so the weakref of `self.mp_manager` doesn't get in
+        Add a object to be run within a separate :class:`multiprocessing.Process`.
+
+        Sidecar processes are those used by other subsystems. For example, to connect to a
+        messaging broker, read and write to it etc.
+
+        @param sidecar (:class:`AbstractMycorrhiza`) as the base class. Enough of the governor will
+        be automatically attached to the sidecar to allow it's :meth:`submit_task` to work.
+        """
+        assert isinstance(sidecar, AbstractMycorrhiza)
+        self._sidecar_instances.append(sidecar)
+
+    def start_internal_processes(self):
+        """
+        Run the governor's own management process along with any sidecar processes in separate
+        :class:`multiprocessing.Process`s.
+
+        For sidecar processes see :meth:`attach_sidecar`.
+
+        The internal process is a classmethod so the weakref of `self.mp_manager` doesn't get in
         the way of serialising the instance of this class.
 
         This method prepares the shared objects for use by the governor's Process.
 
         @return: :class:`Process` - just in case the reference is need to cleanly kill the process.
         """
+        if len(self._internal_process_table) > 0:
+            msg = "This should only be called once; There are already running processes"
+            raise ValueError(msg)
+
         pkwargs = {
-            "work_queue_receive": self._work_queue_receive,
-            "work_queue_submit": self._work_queue_submit,
+            "governor_id": self.governor_id,
+            "work_queue_receive": self._task_queue_submit,
             "process_table": self.process_table,
             "previous_tasks": self.previous_tasks,
             "runtime": self.runtime,
             "available_processing_capacity": self.available_processing_capacity,
             "available_classes": self.accepted_classes,
+            "isolated_processor": self.isolated_processor,
         }
 
         governor_proc = multiprocessing.Process(target=Governor.run_forever, kwargs=pkwargs)
         governor_proc.start()
+        self._internal_process_table.append(governor_proc)
+
+        # optional side processes
+        for c in self._sidecar_instances:
+            rf_kwargs = dict(
+                work_queue_submit=self._task_queue_submit,
+                available_processing_capacity=self.available_processing_capacity,
+            )
+            proc = multiprocessing.Process(target=c.run_forever, kwargs=rf_kwargs)
+            proc.start()
+            self._internal_process_table.append(proc)
 
         return governor_proc
 
@@ -96,13 +178,14 @@ class Governor:
     @classmethod
     def run_forever(
         cls,
+        governor_id,
         work_queue_receive,
-        work_queue_submit,
         process_table,
         previous_tasks,
         runtime,
         available_processing_capacity,
         available_classes,
+        isolated_processor,
     ):
         """
         The governor's own worker process. It manages running tasks and the communication with task
@@ -110,17 +193,22 @@ class Governor:
         """
 
         while True:
-            tasks_waiting_in_queue = work_queue_receive.poll()
+            # Slight race condition - the window between 'Read incoming tasks' and calculating the
+            # `processing_capacity` is an opportunity for many tasks to be added to the pipe. A
+            # semaphore could be used alongside any operation on the process_table.
+            empty_queue = work_queue_receive.empty()
             processing_capacity = runtime.max_concurrent_tasks - len(process_table)
 
             # maintain the capacity score-board
-            if not tasks_waiting_in_queue and processing_capacity > 0:
+            if empty_queue and processing_capacity > 0:
                 available_processing_capacity.value = processing_capacity
             else:
                 # there are items in the queue, no idea how many, they might be tasks
                 available_processing_capacity.value = 0
 
-            work_spec = work_queue_receive.recv()
+            # Read incoming tasks
+            # This process should spend a lot of time here waiting for the next instruction
+            work_spec = work_queue_receive.get()
 
             if isinstance(work_spec, TaskMessage):
                 # this message is the specification for the execution of a task
@@ -130,22 +218,34 @@ class Governor:
                 cls.log(f"Recieved task_spec: '{task_spec}' is proc: {proc_id}")
 
                 # Setup a blast radius and make context available to this isolated process
-                ayeaye_proc_wrapper = AyeAyeProcess(
-                    task_id=proc_id,
-                    work_queue=work_queue_submit,
-                    available_classes=available_classes,
-                )
+                if task_spec.model_class not in available_classes:
+                    # Throwing an exception seems pretty extreme for what is expected to be a long
+                    # running method but it's a coding mistake for a task to be in the pipe without
+                    # being sanatised by :meth:`submit_task`.
+                    msg = f"Model class '{task_spec.model_class}' is not an accepted class"
+                    raise InvalidTaskSpec(msg)
+
+                TaskCls = available_classes[task_spec.model_class]
+
+                iso_proc_kwargs = {
+                    "task_id": proc_id,
+                    "model_cls": TaskCls,
+                    "method": task_spec.method,
+                    "method_kwargs": task_spec.method_kwargs,
+                    "resolver_context": task_spec.resolver_context,
+                }
 
                 process_table[proc_id] = {
                     "task_spec": task_spec,
-                    "wrapped_process": ayeaye_proc_wrapper,
                     "started": datetime.utcnow(),
                 }
 
-                # run the process. It put's results onto the work_queue when it's done.
+                # run the process. It communicates back to this governor process by putting it's
+                # results, exceptions etc. onto the work_queue.
+                # Note - isolated_processor is a callable
                 ayeaye_proc = multiprocessing.Process(
-                    target=ayeaye_proc_wrapper,
-                    kwargs={"task_spec": task_spec},
+                    target=isolated_processor,
+                    kwargs=iso_proc_kwargs,
                 )
                 ayeaye_proc.start()
 
@@ -164,6 +264,8 @@ class Governor:
 
                 # These are the details of the task from before processing
                 task_spec = process_details["task_spec"]
+
+                print(f"governor {governor_id} see completion of ", task_spec)
 
                 # TODO - external code - wrap in try except
                 task_spec.on_completion_callback(result_spec, task_spec)
@@ -219,7 +321,7 @@ class Governor:
             msg = f"Model class '{task_spec.model_class}' is not in the list of accepted classes."
             raise InvalidTaskSpec(msg)
 
-        self._work_queue_submit.send(task_spec)
+        self._task_queue_submit.put(task_spec)
         return self.governor_id
 
     @classmethod

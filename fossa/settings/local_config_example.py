@@ -1,5 +1,5 @@
 from fossa.settings.global_config import BaseConfig
-from tests.simple_example_etl import SimpleExampleEtl
+from tests.example_etl import SimpleExampleEtl
 
 
 class Config(BaseConfig):

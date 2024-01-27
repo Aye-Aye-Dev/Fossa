@@ -6,8 +6,7 @@ import os
 
 import gunicorn.app.base
 
-from fossa.app import create_app
-from fossa.control.governor import Governor
+from fossa.app import single_config_initialise
 
 
 class StandaloneApplication(gunicorn.app.base.BaseApplication):
@@ -41,11 +40,7 @@ def run_forever(deployment_label):
         Used to choose the settings file. i.e. 'prod' uses .....settings.prod_config.Config
     """
     config_package = f"fossa.settings.{deployment_label}_config.Config"
-
-    governor = Governor()
-    governor.start_internal_process()
-
-    app = create_app(config_package, governor)
+    app = single_config_initialise(config_package)
 
     options = {
         "bind": "%s:%s" % ("0.0.0.0", app.config["HTTP_PORT"]),

@@ -3,7 +3,7 @@ import time
 from fossa.control.message import TaskMessage, TerminateMessage
 
 from tests.base import BaseTest
-from tests.simple_example_etl import SimpleExampleEtl
+from tests.example_etl import SimpleExampleEtl
 
 
 class TestGovernor(BaseTest):
@@ -18,7 +18,7 @@ class TestGovernor(BaseTest):
         )
         self.assertEqual(0, self.governor.available_processing_capacity.value, msg)
 
-        proc = self.governor.start_internal_process()
+        proc = self.governor.start_internal_processes()
 
         # poll every 100ms for a maximum of 5 seconds
         start_time = time.time()
@@ -30,7 +30,7 @@ class TestGovernor(BaseTest):
             time.sleep(0.1)
 
         # instruct the governor to stop
-        self.governor._work_queue_submit.send(TerminateMessage())
+        self.governor._task_queue_submit.put(TerminateMessage())
 
         # wait for it to terminate
         proc.join()

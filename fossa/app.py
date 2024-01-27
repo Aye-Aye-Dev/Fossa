@@ -40,19 +40,42 @@ def create_app(settings_class, governor):
     return app
 
 
-def run_local_app():
+def single_config_initialise(flask_config):
     """
-    Run app locally just for development, don't use this in production.
+    A convenient layout is for Fossa and Flask settings to stored in a single shared python class.
+
+    There is a connection between the :class:`Governor` and Flask which must be setup correctly in
+    order for the governor and flask requests to communicate. There are a number of ways to achieve
+    this including this simple function that is used by the gunicorn runner and local (developer's)
+    run mode.
+
+    @param flask_config: (anything accepted by Flask's `app.config.from_object`)
+    @return: Flask app
     """
     governor = Governor()
-
-    settings = "fossa.settings.local_config.Config"
-    app = create_app(settings, governor)
+    app = create_app(flask_config, governor)
 
     for model_cls in app.config["ACCEPTED_MODEL_CLASSES"]:
         governor.set_accepted_class(model_cls)
 
-    governor.start_internal_process()
+    isolated_processor = app.config.get("ISOLATED_PROCESSOR")
+    if isolated_processor:
+        governor.isolated_processor = isolated_processor
+
+    for callable_manager in app.config.get("MESSAGE_BROKER_MANAGERS"):
+        governor.attach_sidecar(callable_manager)
+
+    governor.start_internal_processes()
+
+    return app
+
+
+def run_local_app():
+    """
+    Run app locally just for development, don't use this in production.
+    """
+    settings = "fossa.settings.local_config.Config"
+    app = single_config_initialise(settings)
 
     app.run(
         debug=app.config["DEBUG"],
