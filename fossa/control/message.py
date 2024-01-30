@@ -13,7 +13,7 @@ class TaskMessage(AbstractMessage):
     method: str
     method_kwargs: dict
     resolver_context: dict
-    on_completion_callback: Callable
+    on_completion_callback: Callable  # takes final_task_message (str), task_spec (this TaskMessage)
     task_id: Optional[str] = None
 
 
@@ -24,7 +24,7 @@ class ResultsMessage(AbstractMessage):
     """
 
     task_id: str
-    result: Any
+    task_message: Any  # subclass obj. of :class:`ayeaye.runtime.task_message.AbstractTaskMessage`
 
 
 @dataclass

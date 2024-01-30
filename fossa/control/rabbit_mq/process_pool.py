@@ -1,10 +1,11 @@
 from datetime import datetime
 import json
-import multiprocessing
 import random
 import string
 
-from ayeaye.runtime.multiprocess import AbstractProcessPool, MessageType
+from ayeaye.runtime.multiprocess import AbstractProcessPool
+from ayeaye.runtime.task_message import task_message_factory, TaskComplete, TaskFailed
+
 import pika
 
 from fossa.control.rabbit_mq.pika_client import BasicPikaClient
@@ -34,8 +35,10 @@ class RabbitMqProcessPool(AbstractProcessPool):
         processes=None,
     ):
         """
-        Generator yielding (method_name, method_kwargs, subtask_return_value) from completed
-        subtasks.
+        Generator yielding instances that are a subclass of :class:`AbstractTaskMessage`. These
+        are from subtasks.
+
+        @see doc. string in :meth:`AbstractProcessPool.run_subtasks`
         """
         if processes is None:
             # if the count of processes is used to distribute the workers this will work
@@ -71,22 +74,16 @@ class RabbitMqProcessPool(AbstractProcessPool):
         ):
             # 'reply_queue' message is received.
 
-            processing_complete_task = json.loads(body)
+            # could be a complete, fail or log
+            task_message = task_message_factory(body)
 
-            # TODO - add log messages too
-            subtask_return = (
-                MessageType.COMPLETE,
-                method_name,
-                processing_complete_task["task_spec"]["method"],
-                processing_complete_task["result_spec"]["result"]["return_value"],
-            )
-            # (method_name, method_kwargs, subtask_return_value)
-            yield subtask_return
+            if isinstance(task_message, (TaskComplete, TaskFailed)):
+                self.log("subtask_complete", body)
+                subtask_id = properties.correlation_id
+                if subtask_id in self.tasks_in_flight:
+                    del self.tasks_in_flight[subtask_id]
 
-            self.log("subtask_complete_callback", body)
-            subtask_id = properties.correlation_id
-            if subtask_id in self.tasks_in_flight:
-                del self.tasks_in_flight[subtask_id]
+            yield task_message
 
             if len(self.tasks_in_flight) == 0:
                 self.log("All tasks complete")

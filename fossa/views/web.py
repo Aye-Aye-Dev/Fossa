@@ -24,7 +24,7 @@ def index():
         summary = asdict(t["task_spec"])
         summary["started"] = t["started"]
         summary["finished"] = t["finished"]
-        summary["results"] = t["result_spec"].result
+        summary["results"] = t["result_spec"].task_message
         previous_tasks.append(summary)
 
     page_vars = {

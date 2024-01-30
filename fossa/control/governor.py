@@ -267,8 +267,11 @@ class Governor:
 
                 print(f"governor {governor_id} see completion of ", task_spec)
 
+                # either a fail or complete message
+                final_task_message = result_spec.task_message
+
                 # TODO - external code - wrap in try except
-                task_spec.on_completion_callback(result_spec, task_spec)
+                task_spec.on_completion_callback(final_task_message, task_spec)
 
                 # Remove from processing table but keep a log of finished tasks
                 previous_tasks.append(process_details)
