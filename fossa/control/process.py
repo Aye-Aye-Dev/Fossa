@@ -1,4 +1,8 @@
+import traceback
+import sys
+
 import ayeaye
+from ayeaye.runtime.task_message import TaskComplete, TaskFailed
 
 from fossa.control.message import ResultsMessage
 
@@ -35,6 +39,18 @@ class AbstractIsolatedProcessor:
         """
         self.work_queue = work_queue
 
+    def on_model_start(self, model):
+        """
+        Optionally implemented by subclasses to makes it easy for subclasses to act on the model
+        before methods on the model are run.
+
+        For example, if just the `process_pool` needs to be changed then the subclass won't need to
+        implement :meth:`__call__` etc.
+
+        @param model: (subclass of :class:`ayeaye.Model`)
+        """
+        return None
+
     def __call__(self, task_id, model_cls, method, method_kwargs, resolver_context):
         """
         Run/execute the model.
@@ -54,7 +70,48 @@ class AbstractIsolatedProcessor:
         @param resolver_context: (dict)
         @return: None
         """
-        raise NotImplementedError("Must be implemented in subclasses")
+        try:
+            with ayeaye.connector_resolver.context(**resolver_context):
+                model = model_cls()
+
+                # optional hook used by subclasses
+                self.on_model_start(model)
+
+                # TODO - attach logging - hint - send TaskLogMessage down self.work_queue
+
+                sub_task_method = getattr(model, method)
+                subtask_return_value = sub_task_method(**method_kwargs)
+
+            task_complete = TaskComplete(
+                method_name=method, method_kwargs=method_kwargs, return_value=subtask_return_value
+            )
+
+            result_spec = ResultsMessage(
+                task_id=task_id,
+                task_message=task_complete.to_json(),
+            )
+
+        except Exception as e:
+            # TODO - this is a bit rough
+
+            _e_type, _e_value, e_traceback = sys.exc_info()
+            traceback_ln = []
+            tb_list = traceback.extract_tb(e_traceback)
+            for filename, line, funcname, text in tb_list:
+                traceback_ln.append(f"Traceback:  File[{filename}] Line[{line}] Text[{text}]")
+
+            task_failed = TaskFailed(
+                method_name=method,
+                method_kwargs=method_kwargs,
+                exception_class_name=str(type(e)),
+                traceback=traceback_ln,
+            )
+            result_spec = ResultsMessage(
+                task_id=task_id,
+                task_message=task_failed.to_json(),
+            )
+
+        self.work_queue.put(result_spec)
 
 
 class LocalAyeAyeProcessor(AbstractIsolatedProcessor):
@@ -74,32 +131,11 @@ class LocalAyeAyeProcessor(AbstractIsolatedProcessor):
         self.enforce_single_partition = kwargs.pop("enforce_single_partition", True)
         super().__init__(*args, **kwargs)
 
-    def __call__(self, task_id, model_cls, method, method_kwargs, resolver_context):
+    def on_model_start(self, model):
         """
-        Run/execute the model.
-
-        @see doc. string in :meth:`AbstractAyeAyeProcess.__call__`.
+        @see :meth:`AbstractIsolatedProcessor.on_model_start` for doc. string.
         """
-        try:
-            with ayeaye.connector_resolver.context(**resolver_context):
-                model = model_cls()
-
-                if self.enforce_single_partition and issubclass(model_cls, ayeaye.PartitionedModel):
-                    # Force a maximum of one process when running a parallel model
-                    model.runtime.max_concurrent_tasks = 1
-
-                sub_task_method = getattr(model, method)
-                subtask_return_value = sub_task_method(**method_kwargs)
-
-            result_spec = ResultsMessage(
-                task_id=task_id,
-                result={"return_value": subtask_return_value},
-            )
-        except Exception as e:
-            # TODO - this is a bit rough
-            result_spec = ResultsMessage(
-                task_id=task_id,
-                result={"exception": str(e)},
-            )
-
-        self.work_queue.put(result_spec)
+        model_cls = model.__class__
+        if self.enforce_single_partition and issubclass(model_cls, ayeaye.PartitionedModel):
+            # Force a maximum of one process when running a parallel model
+            model.runtime.max_concurrent_tasks = 1

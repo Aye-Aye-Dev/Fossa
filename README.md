@@ -72,3 +72,14 @@ curl --header "Content-Type: application/json" \
      --data '{"model_class":"SimpleExampleEtl"}'  \
      --request POST http://0.0.0.0:2345/api/0.01/task
 ```
+
+
+### Distributed (but still local) processing
+
+TODO
+
+```shell
+curl --header "Content-Type: application/json" \
+     --data '{"model_class":"PartitionedExampleEtl"}'  \
+     --request POST http://0.0.0.0:2345/api/0.01/task
+```

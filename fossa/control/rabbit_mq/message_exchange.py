@@ -1,6 +1,4 @@
-from dataclasses import asdict
 import json
-import time
 
 import pika
 
@@ -32,6 +30,10 @@ class RabbitMx(AbstractMycorrhiza):
         self.broker_url = broker_url
         super().__init__()
 
+    def log(self, message, level="INFO"):
+        # TODO relay these somewhere
+        print(message, level)
+
     def run_forever(self, work_queue_submit, available_processing_capacity):
         "Runs in a separate Process"
 
@@ -45,9 +47,8 @@ class RabbitMx(AbstractMycorrhiza):
             queue=rabbit_mq.task_queue_name,
             auto_ack=True,
         ):
-            print(
-                f"exchange received {body} {properties.correlation_id} sending to {properties.reply_to}"
-            )
+            msg = f"exchange received {body} {properties.correlation_id} -> {properties.reply_to}"
+            self.log(msg)
 
             # TODO use proper types
             rabbit_decoded_task = json.loads(body)
@@ -66,7 +67,7 @@ class RabbitMx(AbstractMycorrhiza):
 
             RabbitMx.submit_task(task_spec, work_queue_submit, available_processing_capacity)
 
-    def callback_on_processing_complete(self, result_spec, task_spec):
+    def callback_on_processing_complete(self, final_task_message, task_spec):
         """
         This callback is executed by the govenor with results from the task.
 
@@ -79,19 +80,12 @@ class RabbitMx(AbstractMycorrhiza):
         composite_task_id = task_spec.task_id
         correlation_id, reply_to = composite_task_id.split("::", maxsplit=1)
 
-        print("processing complete for", correlation_id)
-
-        reply_payload = {
-            "result_spec": asdict(result_spec),
-            "task_spec": asdict(task_spec),
-        }
-        del reply_payload["task_spec"]["on_completion_callback"]
-        reply_serialised = json.dumps(reply_payload)
+        self.log(f"processing complete for {correlation_id}")
 
         rabbit_mq.channel.basic_publish(
             exchange="",
             routing_key=reply_to,
             properties=pika.BasicProperties(correlation_id=correlation_id),
-            body=reply_serialised,
+            body=final_task_message,
         )
-        print("reply complete for", correlation_id)
+        self.log(f"reply complete for {correlation_id}")
