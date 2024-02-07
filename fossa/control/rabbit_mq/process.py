@@ -35,6 +35,10 @@ class RabbitMqProcessor(AbstractIsolatedProcessor):
             # passing is rightly or wrongly being setup for all methods.
             model.process_pool = RabbitMqProcessPool(broker_url=self.broker_url)
 
+            # Both RabbitMqProcessor and RabbitMqProcessPool use the LoggingMixin so share the
+            # logging setup
+            model.process_pool.copy_logging_setup(self)
+
             # TODO - This should include info on how many workers there are in the pool
             # for now, just set this to anything so it's not confused with local CPU counts
             model.runtime.max_concurrent_tasks = 128

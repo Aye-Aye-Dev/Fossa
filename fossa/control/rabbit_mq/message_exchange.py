@@ -18,7 +18,7 @@ class RabbitMx(AbstractMycorrhiza):
     from the task back to the originator.
     """
 
-    def __init__(self, broker_url):
+    def __init__(self, broker_url, *args, **kwargs):
         """
         @param broker_url: (str) to connect to Rabbit MQ
         e.g.
@@ -28,11 +28,7 @@ class RabbitMx(AbstractMycorrhiza):
         f"amqps://{rabbitmq_user}:{rabbitmq_password}@{rabbitmq_broker_id}.mq.{region}.amazonaws.com:5671"
         """
         self.broker_url = broker_url
-        super().__init__()
-
-    def log(self, message, level="INFO"):
-        # TODO relay these somewhere
-        print(message, level)
+        super().__init__(*args, **kwargs)
 
     def run_forever(self, work_queue_submit, available_processing_capacity):
         "Runs in a separate Process"
@@ -41,7 +37,7 @@ class RabbitMx(AbstractMycorrhiza):
         rabbit_mq.init_queue()
         rabbit_mq.channel.basic_qos(prefetch_count=1)
 
-        print("Waiting for messages")
+        self.log("RabbitMx starting .. waiting for messages ...")
         rabbit_mq.channel.start_consuming()
         for _method, properties, body in rabbit_mq.channel.consume(
             queue=rabbit_mq.task_queue_name,
@@ -56,7 +52,7 @@ class RabbitMx(AbstractMycorrhiza):
             # TODO rename to 'partition_initialise' and use it
             del rabbit_decoded_task["initialise"]
 
-            # keep track of where the sub-task's work is sent.
+            # keep track of where the sub-task's work should be sent.
             composite_task_id = f"{properties.correlation_id}::{properties.reply_to}"
 
             task_spec = TaskMessage(

@@ -55,6 +55,11 @@ def single_config_initialise(flask_config):
     governor = Governor()
     app = create_app(flask_config, governor)
 
+    governor.log_to_stdout = app.config["LOG_TO_STDOUT"]
+
+    for logger in app.config.get("EXTERNAL_LOGGERS", []):
+        governor.attach_external_logger(logger)
+
     for model_cls in app.config["ACCEPTED_MODEL_CLASSES"]:
         governor.set_accepted_class(model_cls)
 

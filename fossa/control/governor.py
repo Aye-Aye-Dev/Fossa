@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 from inspect import isclass
 import multiprocessing
@@ -11,18 +12,17 @@ from ayeaye.runtime.knowledge import RuntimeKnowledge
 from fossa.control.broker import AbstractMycorrhiza
 from fossa.control.message import TaskMessage, ResultsMessage, TerminateMessage
 from fossa.control.process import LocalAyeAyeProcessor
+from fossa.tools.logging import LoggingMixin, MiniLogger
 
 
 class InvalidTaskSpec(ValueError):
     pass
 
 
-class Governor:
+class Governor(LoggingMixin):
     """
     Connect the web frontend; message brokers and task execution.
     """
-
-    print_to_stdout = True
 
     def __init__(self, isolated_processor=None):
         """
@@ -36,7 +36,7 @@ class Governor:
                 If not explicitly set through this constructor or through :attr:`isolated_processor`
                 the :class:`LocalAyeAyeProcess` processor will be used.
         """
-        # self.general_lock = multiprocessing.Lock()
+        LoggingMixin.__init__(self)
 
         # Tasks submitted and internal tasks (e.g. process results at end of task) are put on this
         # queue.
@@ -94,6 +94,10 @@ class Governor:
             # connect the governor with isolated processes with a Pipe
             self._isolated_processor.set_work_queue(self._task_queue_submit)
 
+            # copy logging setup across
+            assert isinstance(self._isolated_processor, LoggingMixin)
+            self._isolated_processor.copy_logging_setup(self)
+
         return self._isolated_processor
 
     @isolated_processor.setter
@@ -101,6 +105,10 @@ class Governor:
         "See doc. string in getter version of :meth:`isolated_processor`"
         self._isolated_processor = processor
         self._isolated_processor.set_work_queue(self._task_queue_submit)
+
+        # copy logging setup across if supported by processor
+        if isinstance(self._isolated_processor, LoggingMixin):
+            self._isolated_processor.copy_logging_setup(self)
 
     @property
     def has_processing_capacity(self):
@@ -119,7 +127,8 @@ class Governor:
         messaging broker, read and write to it etc.
 
         @param sidecar (:class:`AbstractMycorrhiza`) as the base class. Enough of the governor will
-        be automatically attached to the sidecar to allow it's :meth:`submit_task` to work.
+        be automatically attached to the sidecar to allow it's :meth:`submit_task` to work. See
+        the doc. string in :class:`AbstractMycorrhiza` for details on this.
         """
         assert isinstance(sidecar, AbstractMycorrhiza)
         self._sidecar_instances.append(sidecar)
@@ -127,14 +136,13 @@ class Governor:
     def start_internal_processes(self):
         """
         Run the governor's own management process along with any sidecar processes in separate
-        :class:`multiprocessing.Process`s.
+        :class:`multiprocessing.Processes.
 
         For sidecar processes see :meth:`attach_sidecar`.
 
         The internal process is a classmethod so the weakref of `self.mp_manager` doesn't get in
-        the way of serialising the instance of this class.
-
-        This method prepares the shared objects for use by the governor's Process.
+        the way of serialising the instance of this class. This manager and other shared objects
+        are prepared here for the governor's `run_forever` Process.
 
         @return: :class:`Process` - just in case the reference is need to cleanly kill the process.
         """
@@ -151,6 +159,8 @@ class Governor:
             "available_processing_capacity": self.available_processing_capacity,
             "available_classes": self.accepted_classes,
             "isolated_processor": self.isolated_processor,
+            "external_loggers": [copy.copy(logger) for logger in self.external_loggers],
+            "log_to_stdout": self.log_to_stdout,
         }
 
         governor_proc = multiprocessing.Process(target=Governor.run_forever, kwargs=pkwargs)
@@ -159,6 +169,9 @@ class Governor:
 
         # optional side processes
         for c in self._sidecar_instances:
+            if isinstance(c, LoggingMixin):
+                c.copy_logging_setup(self)
+
             rf_kwargs = dict(
                 work_queue_submit=self._task_queue_submit,
                 available_processing_capacity=self.available_processing_capacity,
@@ -168,12 +181,6 @@ class Governor:
             self._internal_process_table.append(proc)
 
         return governor_proc
-
-    @classmethod
-    def log(cls, msg, level="INFO"):
-        "Hook for local messages to make it easy to pipe them elsewhere."
-        if cls.print_to_stdout:
-            print(msg)
 
     @classmethod
     def run_forever(
@@ -186,11 +193,18 @@ class Governor:
         available_processing_capacity,
         available_classes,
         isolated_processor,
+        external_loggers,
+        log_to_stdout,
     ):
         """
         The governor's own worker process. It manages running tasks and the communication with task
         queues.
         """
+
+        logger = MiniLogger()
+        logger.log_to_stdout = log_to_stdout
+        for ext_log in external_loggers:
+            logger.attach_external_logger(ext_log)
 
         while True:
             # Slight race condition - the window between 'Read incoming tasks' and calculating the
@@ -215,7 +229,7 @@ class Governor:
                 task_spec = work_spec
 
                 proc_id = cls._generate_identifier()
-                cls.log(f"Recieved task_spec: '{task_spec}' is proc: {proc_id}")
+                logger.log(f"Recieved task_spec: '{task_spec}' is proc: {proc_id}")
 
                 # Setup a blast radius and make context available to this isolated process
                 if task_spec.model_class not in available_classes:
@@ -256,7 +270,7 @@ class Governor:
                 task_id = result_spec.task_id
                 process_details = process_table.get(task_id)
                 if process_details is None:
-                    cls.log(f"Unknown task id [{task_id}], skipping callback", level="ERROR")
+                    logger.log(f"Unknown task id [{task_id}], skipping callback", level="ERROR")
                     continue
 
                 process_details["finished"] = datetime.utcnow()
@@ -265,7 +279,7 @@ class Governor:
                 # These are the details of the task from before processing
                 task_spec = process_details["task_spec"]
 
-                print(f"governor {governor_id} see completion of ", task_spec)
+                logger.log(f"governor {governor_id} received completion message: {task_spec}")
 
                 # either a fail or complete message
                 final_task_message = result_spec.task_message
@@ -278,10 +292,10 @@ class Governor:
                 del process_table[task_id]
 
             elif isinstance(work_spec, TerminateMessage):
-                cls.log("Received termination message, ending now")
+                logger.log("Received termination message, ending now")
                 return
             else:
-                cls.log("Unknown message type received and ignored", level="ERROR")
+                logger.log("Unknown message type received and ignored", level="ERROR")
 
     def set_accepted_class(self, model_cls):
         """

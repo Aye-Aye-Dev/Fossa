@@ -19,6 +19,7 @@ class BaseTest(unittest.TestCase):
 
         # internal process not started
         self.governor = Governor()
+        self.governor.log_to_stdout = False
 
         self.app = create_app(self.config, self.governor)
 
