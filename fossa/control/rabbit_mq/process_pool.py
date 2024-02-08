@@ -9,22 +9,19 @@ from ayeaye.runtime.task_message import task_message_factory, TaskComplete, Task
 import pika
 
 from fossa.control.rabbit_mq.pika_client import BasicPikaClient
+from fossa.tools.logging import LoggingMixin
 
 
-class RabbitMqProcessPool(AbstractProcessPool):
+class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
     """
     Send sub-tasks to workers listening on a Rabbit MQ queue.
     """
 
     def __init__(self, broker_url):
+        LoggingMixin.__init__(self)
         self.rabbit_mq = BasicPikaClient(url=broker_url)
         self.tasks_in_flight = {}
         self.pool_id = "".join([random.choice(string.ascii_lowercase) for _ in range(5)])
-        # self.task_complete_receive, self.task_complete_submit = multiprocessing.Pipe(duplex=False)
-
-    def log(self, message, level="INFO"):
-        # TODO relay these somewhere
-        print(message, level)
 
     def run_subtasks(
         self,
@@ -78,7 +75,7 @@ class RabbitMqProcessPool(AbstractProcessPool):
             task_message = task_message_factory(body)
 
             if isinstance(task_message, (TaskComplete, TaskFailed)):
-                self.log("subtask_complete", body)
+                self.log(f"subtask_complete: {body}")
                 subtask_id = properties.correlation_id
                 if subtask_id in self.tasks_in_flight:
                     del self.tasks_in_flight[subtask_id]

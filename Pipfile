@@ -8,6 +8,7 @@ flask = "*"
 gunicorn = "*"
 ayeaye = "*"
 pika = "*"
+boto3 = "*"
 
 [dev-packages]
 

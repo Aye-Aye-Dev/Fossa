@@ -5,9 +5,10 @@ import ayeaye
 from ayeaye.runtime.task_message import TaskComplete, TaskFailed
 
 from fossa.control.message import ResultsMessage
+from fossa.tools.logging import LoggingMixin
 
 
-class AbstractIsolatedProcessor:
+class AbstractIsolatedProcessor(LoggingMixin):
     """
     Run methods on an :class:`ayeaye.Model` within an isolated :class:`multiprocess.Process`.
 
@@ -31,6 +32,7 @@ class AbstractIsolatedProcessor:
         Subclasses are expected to have their own constructors which pass any left over
         arguments to this superclass.
         """
+        LoggingMixin.__init__(self)
         self.work_queue = None
 
     def set_work_queue(self, work_queue):
@@ -92,17 +94,19 @@ class AbstractIsolatedProcessor:
             )
 
         except Exception as e:
-            # TODO - this is a bit rough
-
+            # TODO - recording the traceback is a bit rough
             _e_type, _e_value, e_traceback = sys.exc_info()
             traceback_ln = []
             tb_list = traceback.extract_tb(e_traceback)
             for filename, line, funcname, text in tb_list:
                 traceback_ln.append(f"Traceback:  File[{filename}] Line[{line}] Text[{text}]")
 
+            # Record a fair amount about the failure to send back to the originating model
             task_failed = TaskFailed(
+                model_class_name=model_cls.__name__,
                 method_name=method,
                 method_kwargs=method_kwargs,
+                resolver_context=resolver_context,
                 exception_class_name=str(type(e)),
                 traceback=traceback_ln,
             )
