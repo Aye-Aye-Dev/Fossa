@@ -1,6 +1,6 @@
 # fossa project specific
-fossa/settings/local_config*.py
-!fossa/settings/local_config_example.py
+lib/fossa/settings/local_config*.py
+!lib/fossa/settings/local_config_example.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -18,7 +18,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
