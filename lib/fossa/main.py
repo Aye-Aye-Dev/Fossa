@@ -32,15 +32,14 @@ class StandaloneApplication(gunicorn.app.base.BaseApplication):
         return self.application
 
 
-def run_forever(deployment_label):
+def run_fossa(deployment_config):
     """
     Run Fossa through gunicorn.
 
-    @param deployment_label: (str)
+    @param deployment_config: (str or class or anything accepted by Flask's `app.config.from_object`)
         Used to choose the settings file. i.e. 'prod' uses .....settings.prod_config.Config
     """
-    config_package = f"fossa.settings.{deployment_label}_config.Config"
-    app = single_config_initialise(config_package)
+    app = single_config_initialise(deployment_config)
 
     options = {
         "bind": "%s:%s" % ("0.0.0.0", app.config["HTTP_PORT"]),
@@ -54,4 +53,5 @@ def run_forever(deployment_label):
 
 if __name__ == "__main__":
     deployment_label = os.environ["DEPLOYMENT_ENVIRONMENT"]
-    run_forever(deployment_label)
+    config_package = f"fossa.settings.{deployment_label}_config.Config"
+    run_fossa(config_package)

@@ -1,9 +1,8 @@
 import time
 
+from examples.example_etl import NothingEtl
 from fossa.control.message import TaskMessage, TerminateMessage
-
 from tests.base import BaseTest
-from tests.example_etl import SimpleExampleEtl
 
 
 class TestGovernor(BaseTest):
@@ -39,15 +38,15 @@ class TestGovernor(BaseTest):
         self.assertGreater(capacity_observed, 0, msg)
 
     def test_no_duplicates_set_accepted_class(self):
-        self.governor.set_accepted_class(SimpleExampleEtl)
+        self.governor.set_accepted_class(NothingEtl)
         with self.assertRaises(ValueError) as context:
-            self.governor.set_accepted_class(SimpleExampleEtl)
+            self.governor.set_accepted_class(NothingEtl)
 
         self.assertIn("already exists as an accepted class", str(context.exception))
 
     def test_submit_task(self):
         task_spec = TaskMessage(
-            model_class="SimpleExampleEtl",
+            model_class="NothingEtl",
             method="go",
             method_kwargs={},
             resolver_context={},
@@ -59,7 +58,7 @@ class TestGovernor(BaseTest):
 
         self.assertIn("not in the list of accepted classes", str(context.exception))
 
-        self.governor.set_accepted_class(SimpleExampleEtl)
+        self.governor.set_accepted_class(NothingEtl)
 
         msg = "Should be allowed now"
         governor_id = self.governor.submit_task(task_spec)

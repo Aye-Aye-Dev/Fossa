@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.3] - 2024-03-05
+### Fixed
+- missing tools
+
+### Changed
+- renamed 'run_forever' to 'run_fossa'
+
+### Added
+- BaseConfig as top level module
+- Alternative way to pass a config to run_forever
+
 ## [0.0.2] - 2024-03-05
 ### Added
 - Layout to make this work as a package

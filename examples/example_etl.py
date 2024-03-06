@@ -3,7 +3,9 @@ import hashlib
 import ayeaye
 
 
-class SimpleExampleEtl(ayeaye.Model):
+class NothingEtl(ayeaye.Model):
+    "Test ETL model that doesn't ETL anything."
+
     def build(self):
         pass
 

@@ -5,7 +5,7 @@ Execution engine for Aye-Aye ETL models
 
 Fossa runs Aye-aye models and their subtasks across a distributed environment.
 
-Aye-aye models can be run without Fossa (as they are just Python code) but when a model grows too big to execute on a single computer the task needs to be spread across multiple computers. A 'distributed environment' is one with multiple compute node that are networked so messages can be passed between nodes.
+Aye-aye models can be run without Fossa (they're just Python code) but when a model grows too big to execute on a single computer the task needs to be spread across multiple computers. A 'distributed environment' is one with multiple compute node that are networked so messages can be passed between nodes.
 
 An instance of Fossa runs on each compute node where it facilitates the communication of messages between nodes.
 
@@ -13,6 +13,39 @@ A node could be a docker or full computer instance.
 
 
 ## Getting Started
+
+Setup your virtual environment (venv, pipenv, poetry etc.)
+
+```shell
+pip install ayeaye-fossa
+```
+
+Make a python module to use this-
+
+```python
+import ayeaye
+
+from fossa import run_fossa, BaseConfig
+
+class NothingEtl(ayeaye.Model):
+    def build(self):
+        pass
+
+class FossaConfig(BaseConfig):
+    ACCEPTED_MODEL_CLASSES = [NothingEtl]
+
+run_fossa(FossaConfig)
+```
+
+Run it and point your browser to *http://0.0.0.0:2345/*. You have a fossa node that will only run the `NothingEtl` model locally. This is useless as that model doesn't do anything but it's a start.
+
+The [examples](./examples) directory has that example plus a few more.
+
+
+
+## Running Fossa locally
+
+For local development (so an IDE and debugging tools etc. can be used) the Flask built in server can be used. `run_fossa` (demonstrated above) uses gunicorn.
 
 Ensure your working directory is the same directory as this README file.
 
@@ -29,8 +62,6 @@ The `.env` file is used by pipenv.
 
 For all python commands below you will need to be in this pipenv shell.
 
-
-## Running Fossa locally
 
 In a distributed environment one instance of Fossa would run on each compute node. To experiment with Fossa just run one or more instances on a local computer.
 
