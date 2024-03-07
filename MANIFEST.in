@@ -1,2 +1,3 @@
 include lib/fossa/templates/*
 prune tests
+include settings/global_config.py

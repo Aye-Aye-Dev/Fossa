@@ -55,7 +55,7 @@ class FossaConfig(BaseConfig):
     HTTP_PORT = os.environ["FOSSA_HTTP_PORT"]
     ACCEPTED_MODEL_CLASSES = [PartitionedExampleEtl]
     # in productions, use secrets management here
-    broker_url = "amqp://guest:guest@lobster"
+    broker_url = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@lobster")
     ISOLATED_PROCESSOR = RabbitMqProcessor(broker_url=broker_url)
     MESSAGE_BROKER_MANAGERS = [RabbitMx(broker_url=broker_url)]
 
