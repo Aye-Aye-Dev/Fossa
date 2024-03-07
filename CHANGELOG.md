@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.5] - 2024-03-07
+### Fixed
+- missing `BaseConfig` in distribution again
+
 ## [0.0.4] - 2024-03-06
 ### Fixed
 - missing `BaseConfig` in distribution
-
 
 ## [0.0.3] - 2024-03-06
 ### Fixed
