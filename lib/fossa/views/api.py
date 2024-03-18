@@ -6,6 +6,8 @@ from flask import Blueprint, current_app, jsonify, request
 from fossa.control.governor import InvalidTaskSpec
 from fossa.control.message import TaskMessage
 from fossa.utils import JsonException
+from fossa.views.controller import node_summary
+
 
 api_views = Blueprint("api", __name__)
 
@@ -48,3 +50,11 @@ def submit_task():
 
     page_vars = {"governor_accepted_ident": governor_id}
     return jsonify(page_vars)
+
+
+@api_views.route("/node_info")
+def node_info():
+    "Summary page about the compute node"
+    governor = current_app.fossa_governor
+    node_info = node_summary(governor)
+    return jsonify(node_info)

@@ -9,7 +9,7 @@
 
 <table class="table table-striped">
   <tbody>
-  {%for key,value in node_info%}
+  {%for key,value in node_info.items()%}
     <tr>
       <th>{{key}}</th>
       <td>{{value}}</td>
