@@ -57,4 +57,11 @@ def node_info():
     "Summary page about the compute node"
     governor = current_app.fossa_governor
     node_info = node_summary(governor)
+
+    for task in node_info["recent_completed_tasks"]:
+        # remove not serialisable
+        for k, v in task.items():
+            if callable(v):
+                task[k] = None
+
     return jsonify(node_info)

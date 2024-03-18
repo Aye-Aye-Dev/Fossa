@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  
 ### Added
 - nothing
+
+## [0.0.7] - 2024-03-18
+### Fixed
+- can't serialise 'method' in API node_info endpoint
+
 ## [0.0.6] - 2024-03-18
 ### Added
 - node_info API endpoint - same info as the existing web page
