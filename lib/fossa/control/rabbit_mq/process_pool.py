@@ -59,6 +59,10 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             self.tasks_in_flight[subtask_id]["start_time"] = datetime.utcnow()
             self.send_task(subtask_id=subtask_id, task_payload=task_definition_json)
 
+        for _not_connected in self.rabbit_mq.connect():
+            self.log("Waiting to connect to RabbitMQ....", "WARNING")
+        self.log("Connected to RabbitMQ")
+
         # Listen for subtasks completing
         self.log(f"Waiting on {self.rabbit_mq.reply_queue} ....")
 
@@ -92,7 +96,9 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         @param subtask_id (str):
         @param task_payload (str):
         """
-        self.rabbit_mq.init_queue()
+        for _not_connected in self.rabbit_mq.connect():
+            self.log("Waiting to connect to RabbitMQ....", "WARNING")
+        self.log("Connected to RabbitMQ")
 
         self.rabbit_mq.channel.basic_publish(
             exchange="",

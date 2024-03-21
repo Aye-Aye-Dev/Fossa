@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.8] - 2024-03-21
+### Changed
+- BasicPikaClient to sit around waiting if it can't connect to RabbitMq broker
+
 ## [0.0.7] - 2024-03-18
 ### Fixed
 - can't serialise 'method' in API node_info endpoint

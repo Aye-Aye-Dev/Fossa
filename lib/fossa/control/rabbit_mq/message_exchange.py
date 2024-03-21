@@ -34,7 +34,10 @@ class RabbitMx(AbstractMycorrhiza):
         "Runs in a separate Process"
 
         rabbit_mq = BasicPikaClient(url=self.broker_url)
-        rabbit_mq.init_queue()
+        for _not_connected in rabbit_mq.connect():
+            self.log("Waiting to connect to RabbitMQ....", "WARNING")
+        self.log("Connected to RabbitMQ")
+
         rabbit_mq.channel.basic_qos(prefetch_count=1)
 
         self.log("RabbitMx starting .. waiting for messages ...")
@@ -71,7 +74,9 @@ class RabbitMx(AbstractMycorrhiza):
         """
 
         rabbit_mq = BasicPikaClient(url=self.broker_url)
-        rabbit_mq.init_queue()
+        for _not_connected in rabbit_mq.connect():
+            self.log("Waiting to connect to RabbitMQ....", "WARNING")
+        self.log("Connected to RabbitMQ")
 
         composite_task_id = task_spec.task_id
         correlation_id, reply_to = composite_task_id.split("::", maxsplit=1)
