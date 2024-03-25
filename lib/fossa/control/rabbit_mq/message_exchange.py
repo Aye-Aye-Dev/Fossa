@@ -52,12 +52,8 @@ class RabbitMx(AbstractMycorrhiza):
             # TODO use proper types
             rabbit_decoded_task = json.loads(body)
 
-            # TODO rename to 'partition_initialise' and use it
-            del rabbit_decoded_task["initialise"]
-
             # keep track of where the sub-task's work should be sent.
             composite_task_id = f"{properties.correlation_id}::{properties.reply_to}"
-
             task_spec = TaskMessage(
                 task_id=composite_task_id,
                 **rabbit_decoded_task,

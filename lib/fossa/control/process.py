@@ -53,7 +53,16 @@ class AbstractIsolatedProcessor(LoggingMixin):
         """
         return None
 
-    def __call__(self, task_id, model_cls, method, method_kwargs, resolver_context):
+    def __call__(
+        self,
+        task_id,
+        model_cls,
+        model_construction_kwargs,
+        method,
+        method_kwargs,
+        resolver_context,
+        partition_initialise_kwargs,
+    ):
         """
         Run/execute the model.
 
@@ -67,14 +76,19 @@ class AbstractIsolatedProcessor(LoggingMixin):
 
         @param task_id: (str)
         @param model_cls: (Class, not instance)
+        @param model_construction_kwargs: (dict)
         @param method: (str)
         @param method_kwargs: (dict)
         @param resolver_context: (dict)
+        @param partition_initialise_kwargs: (dict)
         @return: None
         """
         try:
             with ayeaye.connector_resolver.context(**resolver_context):
-                model = model_cls()
+                model = model_cls(**model_construction_kwargs)
+
+                if isinstance(model, ayeaye.PartitionedModel):
+                    model.partition_initialise(**partition_initialise_kwargs)
 
                 # optional hook used by subclasses
                 self.on_model_start(model)
@@ -85,7 +99,9 @@ class AbstractIsolatedProcessor(LoggingMixin):
                 subtask_return_value = sub_task_method(**method_kwargs)
 
             task_complete = TaskComplete(
-                method_name=method, method_kwargs=method_kwargs, return_value=subtask_return_value
+                method_name=method,
+                method_kwargs=method_kwargs,
+                return_value=subtask_return_value,
             )
 
             result_spec = ResultsMessage(

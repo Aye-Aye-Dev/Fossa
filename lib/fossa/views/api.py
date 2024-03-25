@@ -35,6 +35,7 @@ def submit_task():
 
     task_attribs = {
         "model_class": request_doc["model_class"],
+        "model_construction_kwargs": request_doc.get("model_construction_kwargs", {}),
         "method": request_doc.get("method", "go"),  # default for Ayeaye is to run the whole model
         "method_kwargs": request_doc.get("method_kwargs", {}),
         "resolver_context": request_doc.get("resolver_context", {}),

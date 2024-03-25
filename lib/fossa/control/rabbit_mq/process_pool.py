@@ -23,14 +23,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         self.tasks_in_flight = {}
         self.pool_id = "".join([random.choice(string.ascii_lowercase) for _ in range(5)])
 
-    def run_subtasks(
-        self,
-        model_cls,
-        sub_tasks,
-        initialise=None,
-        context_kwargs=None,
-        processes=None,
-    ):
+    def run_subtasks(self, model_cls, sub_tasks, context_kwargs=None, processes=None):
         """
         Generator yielding instances that are a subclass of :class:`AbstractTaskMessage`. These
         are from subtasks.
@@ -43,20 +36,25 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
         # fortunately sub_tasks is a list (not a generator) so all tasks can be sent
         for subtask_number, sub_task in enumerate(sub_tasks):
+            # sub_task is a :class:`TaskPartition` object
+            # See Aye-aye's `ayeaye.runtime.task_message.TaskPartition`
             subtask_id = f"{self.pool_id}:{subtask_number}"
-            method_name, method_kwargs = sub_task
-
             task_definition = {
                 "model_class": model_cls.__name__,
-                "method": method_name,
-                "method_kwargs": method_kwargs,
+                "method": sub_task.method_name,
+                "method_kwargs": sub_task.method_kwargs,
                 "resolver_context": context_kwargs,
-                "initialise": initialise,
+                "model_construction_kwargs": sub_task.model_construction_kwargs,
+                "partition_initialise_kwargs": sub_task.partition_initialise_kwargs,
             }
             task_definition_json = json.dumps(task_definition)
 
             self.tasks_in_flight[subtask_id] = task_definition
             self.tasks_in_flight[subtask_id]["start_time"] = datetime.utcnow()
+
+            # This JSON encoded payload will be received in :meth:`RabbitMx.run_forever` where
+            # all of it will be used alongside some additional args to build :class:`TaskMessage`
+            # TODO - Better typing should be used
             self.send_task(subtask_id=subtask_id, task_payload=task_definition_json)
 
         for _not_connected in self.rabbit_mq.connect():
@@ -92,7 +90,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
     def send_task(self, subtask_id, task_payload):
         """
-        Send a work instruction to be picked up by any worker.
+        Send a work instruction to be picked up by any RabbitMq worker.
         @param subtask_id (str):
         @param task_payload (str):
         """

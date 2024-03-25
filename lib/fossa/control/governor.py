@@ -11,7 +11,7 @@ from ayeaye.runtime.knowledge import RuntimeKnowledge
 
 from fossa.control.broker import AbstractMycorrhiza
 from fossa.control.message import TaskMessage, ResultsMessage, TerminateMessage
-from fossa.control.process import LocalAyeAyeProcessor
+from fossa.control.process import AbstractIsolatedProcessor, LocalAyeAyeProcessor
 from fossa.tools.logging import LoggingMixin, MiniLogger
 
 
@@ -103,6 +103,11 @@ class Governor(LoggingMixin):
     @isolated_processor.setter
     def isolated_processor(self, processor):
         "See doc. string in getter version of :meth:`isolated_processor`"
+
+        if not issubclass(processor.__class__, AbstractIsolatedProcessor):
+            msg = "The isolated processor must be a subclass of `AbstractIsolatedProcessor`"
+            raise ValueError(msg)
+
         self._isolated_processor = processor
         self._isolated_processor.set_work_queue(self._task_queue_submit)
 
@@ -244,9 +249,11 @@ class Governor(LoggingMixin):
                 iso_proc_kwargs = {
                     "task_id": proc_id,
                     "model_cls": TaskCls,
+                    "model_construction_kwargs": task_spec.model_construction_kwargs,
                     "method": task_spec.method,
                     "method_kwargs": task_spec.method_kwargs,
                     "resolver_context": task_spec.resolver_context,
+                    "partition_initialise_kwargs": task_spec.partition_initialise_kwargs,
                 }
 
                 process_table[proc_id] = {

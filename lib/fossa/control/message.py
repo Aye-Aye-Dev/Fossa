@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 
@@ -15,6 +15,8 @@ class TaskMessage(AbstractMessage):
     resolver_context: dict
     on_completion_callback: Callable  # takes final_task_message (str), task_spec (this TaskMessage)
     task_id: Optional[str] = None
+    model_construction_kwargs: dict = field(default_factory=dict)
+    partition_initialise_kwargs: dict = field(default_factory=dict)
 
 
 @dataclass

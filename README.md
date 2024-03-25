@@ -87,6 +87,12 @@ python fossa/app.py
 
 You'll now have a locally running web app. It will output IP addresses it is accepting connections from. Typically just point a browser at `http://0.0.0.0:2345/'
 
+## Running Fossa locally using gunicorn
+
+```shell
+export PYTHONPATH=`pwd`:`pwd`/lib
+DEPLOYMENT_ENVIRONMENT=local python lib/fossa/main.py
+```
 
 ### Posting a task
 
@@ -100,7 +106,7 @@ POST to your local instance of Fossa a task specification. This example runs the
 
 ```shell
 curl --header "Content-Type: application/json" \
-     --data '{"model_class":"SimpleExampleEtl"}'  \
+     --data '{"model_class":"NothingEtl"}'  \
      --request POST http://0.0.0.0:2345/api/0.01/task
 ```
 
