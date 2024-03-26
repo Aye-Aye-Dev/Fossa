@@ -1,12 +1,12 @@
 """
 API views in JSON
 """
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, url_for
 
 from fossa.control.governor import InvalidTaskSpec
 from fossa.control.message import TaskMessage
 from fossa.utils import JsonException
-from fossa.views.controller import node_summary
+from fossa.views.controller import node_summary, task_summary
 
 
 api_views = Blueprint("api", __name__)
@@ -33,7 +33,9 @@ def submit_task():
     if "model_class" not in request_doc:
         raise JsonException(message="'model_class' is a mandatory field", status_code=400)
 
+    task_id = current_app.fossa_governor.new_task_id()
     task_attribs = {
+        "task_id": task_id,
         "model_class": request_doc["model_class"],
         "model_construction_kwargs": request_doc.get("model_construction_kwargs", {}),
         "method": request_doc.get("method", "go"),  # default for Ayeaye is to run the whole model
@@ -49,8 +51,33 @@ def submit_task():
     except InvalidTaskSpec as e:
         raise JsonException(message=str(e), status_code=412)
 
-    page_vars = {"governor_accepted_ident": governor_id}
+    api_url = url_for(
+        "api.task_details",
+        task_id=task_id,
+        _external=True,
+    )
+
+    page_vars = {
+        "_metadata": {"links": {"task": api_url}},
+        "governor_accepted_ident": governor_id,
+        "task_id": task_id,
+    }
     return jsonify(page_vars)
+
+
+@api_views.route("/task/<task_id>")
+def task_details(task_id):
+    governor = current_app.fossa_governor
+    task_info = task_summary(governor, task_id)
+
+    if task_info is None:
+        return jsonify({"message": "task unknown"}), 404
+
+    for k, v in task_info.items():
+        if callable(v):
+            task_info[k] = None
+
+    return jsonify(task_info)
 
 
 @api_views.route("/node_info")

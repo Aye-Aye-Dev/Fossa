@@ -125,6 +125,8 @@ class AbstractIsolatedProcessor(LoggingMixin):
                 resolver_context=resolver_context,
                 exception_class_name=str(type(e)),
                 traceback=traceback_ln,
+                model_construction_kwargs=model_construction_kwargs,
+                partition_initialise_kwargs=partition_initialise_kwargs,
             )
             result_spec = ResultsMessage(
                 task_id=task_id,

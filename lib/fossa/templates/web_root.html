@@ -18,30 +18,62 @@
   </tbody>
 </table>
 
+<h2>Running Tasks</h2>
+
+{%if running_tasks %}
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th scope="col">Task Id</th>
+      <th scope="col">Started</th>
+      <th scope="col">Model class</th>
+      <th scope="col">Method</th>
+      <th scope="col">Method kwargs</th>
+      <th scope="col">Resolver context</th>
+    </tr>
+  </thead>
+  <tbody>
+  {%for t in running_tasks%}
+    <tr>
+      <td>{{t.task_id}}</td>
+      <td>{{t.started}}</td>
+      <td>{{t.model_class}}</td>
+      <td>{{t.method}}</td>
+      <td>{{t.method_kwargs}}</td>
+      <td>{{t.resolver_context}}</td>
+    </tr>
+  {%endfor%}
+  </tbody>
+</table>
+{%else%}
+<p>There aren't currently any running tasks.</p>
+{%endif%}
 
 <h2>Recently Completed Tasks</h2>
 {%if recent_completed_tasks %}
 <table class="table table-striped">
   <thead>
     <tr>
+    	  <th scope="col">Task Id</th>
+      <th scope="col">Started</th>
+      <th scope="col">Finished</th>
       <th scope="col">Model class</th>
       <th scope="col">Method</th>
       <th scope="col">Method kwargs</th>
       <th scope="col">Resolver context</th>
-      <th scope="col">Started</th>
-      <th scope="col">Finished</th>
       <th scope="col">Results</th>
     </tr>
   </thead>
   <tbody>
   {%for t in recent_completed_tasks%}
     <tr>
+    	  <td>{{t.task_id}}</td>
+      <td>{{t.started}}</td>
+      <td>{{t.finished}}</td>
       <td>{{t.model_class}}</td>
       <td>{{t.method}}</td>
       <td>{{t.method_kwargs}}</td>
       <td>{{t.resolver_context}}</td>
-      <td>{{t.started}}</td>
-      <td>{{t.finished}}</td>
       <td>{{t.results}}</td>
     </tr>
   {%endfor%}

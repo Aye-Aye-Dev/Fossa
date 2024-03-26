@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.10] - 2024-03-26
+### Added
+- details on currently running tasks to web view
+- task_id and _metadata section on submit task via API
+- task details page including 'task_status' field
+
+### Changed
+- task_id is created in api view's submit task - this makes it possible to track a task from submission.
+
+### Fixed
+- missing args in TaskFailed in AbstractIsolatedProcessor
+
 ## [0.0.9] - 2024-03-25
 ### Changed
 - AbstractIsolatedProcessor now uses model_construction_kwargs and partition_initialise_kwargs as per updates in upsteam Ayeaye

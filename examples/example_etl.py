@@ -1,4 +1,5 @@
 import hashlib
+import time
 
 import ayeaye
 
@@ -8,6 +9,16 @@ class NothingEtl(ayeaye.Model):
 
     def build(self):
         pass
+
+
+class LongRunningEtl(ayeaye.Model):
+    "Takes ages but does nothing; is used when working on Fossa"
+
+    def build(self):
+        total_loops = 60
+        for i in range(total_loops):
+            self.log(f"Loop {i} of {total_loops}")
+            time.sleep(10)
 
 
 class PartitionedExampleEtl(ayeaye.PartitionedModel):

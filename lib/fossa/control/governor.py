@@ -233,8 +233,7 @@ class Governor(LoggingMixin):
                 # this message is the specification for the execution of a task
                 task_spec = work_spec
 
-                proc_id = cls._generate_identifier()
-                logger.log(f"Recieved task_spec: '{task_spec}' is proc: {proc_id}")
+                logger.log(f"Received task_spec: '{task_spec}' is proc: {task_spec.task_id}")
 
                 # Setup a blast radius and make context available to this isolated process
                 if task_spec.model_class not in available_classes:
@@ -247,7 +246,7 @@ class Governor(LoggingMixin):
                 TaskCls = available_classes[task_spec.model_class]
 
                 iso_proc_kwargs = {
-                    "task_id": proc_id,
+                    "task_id": task_spec.task_id,
                     "model_cls": TaskCls,
                     "model_construction_kwargs": task_spec.model_construction_kwargs,
                     "method": task_spec.method,
@@ -256,7 +255,7 @@ class Governor(LoggingMixin):
                     "partition_initialise_kwargs": task_spec.partition_initialise_kwargs,
                 }
 
-                process_table[proc_id] = {
+                process_table[task_spec.task_id] = {
                     "task_spec": task_spec,
                     "started": datetime.utcnow(),
                 }
@@ -356,3 +355,10 @@ class Governor(LoggingMixin):
         @return: (str)
         """
         return "".join([random.choice(string.ascii_lowercase) for _ in range(5)])
+
+    def new_task_id(self):
+        """
+        @return: (str)
+        """
+        # TODO check for collisions
+        return self._generate_identifier()
