@@ -23,7 +23,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         self.tasks_in_flight = {}
         self.pool_id = "".join([random.choice(string.ascii_lowercase) for _ in range(5)])
 
-    def run_subtasks(self, model_cls, sub_tasks, context_kwargs=None, processes=None):
+    def run_subtasks(self, sub_tasks, context_kwargs=None, processes=None):
         """
         Generator yielding instances that are a subclass of :class:`AbstractTaskMessage`. These
         are from subtasks.
@@ -40,7 +40,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             # See Aye-aye's `ayeaye.runtime.task_message.TaskPartition`
             subtask_id = f"{self.pool_id}:{subtask_number}"
             task_definition = {
-                "model_class": model_cls.__name__,
+                "model_class": sub_task.model_cls.__name__,
                 "method": sub_task.method_name,
                 "method_kwargs": sub_task.method_kwargs,
                 "resolver_context": context_kwargs,

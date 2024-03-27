@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.11] - 2024-03-27
+### Changed
+- RabbitMqProcessPool.run_subtasks to support upsteam Aye-aye change
+
 ## [0.0.10] - 2024-03-26
 ### Added
 - details on currently running tasks to web view
