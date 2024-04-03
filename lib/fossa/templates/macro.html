@@ -1,0 +1,29 @@
+{% macro display_task_results(results) %}
+
+<h2>{{results['type']}}</h2>
+
+<table class="table">
+  <tbody>
+  {%for key,value in results['payload'].items()%}
+    <tr>
+      <th>{{key}}</th>
+      {%if key == 'failure_origin_task_id' and value%}
+        <td><a href="{{ url_for('web.task_details', task_id=value) }}">{{value}}</a></td>
+      {%elif key == 'traceback' %}
+      	<td>
+      	<ol>
+      		{% for tb in value %}
+      		<li>{{tb}}</li>
+      		{% endfor %}
+      	</ol>
+      	</td>
+      {% else %}
+      <td>{{value}}</td>
+      {% endif %}
+    </tr>
+  {%endfor%}
+  </tbody>
+</table>
+
+
+{% endmacro%}

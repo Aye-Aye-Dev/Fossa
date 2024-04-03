@@ -5,6 +5,7 @@ import multiprocessing
 from multiprocessing.sharedctypes import Value
 import os
 import random
+import signal
 import string
 
 from ayeaye.runtime.knowledge import RuntimeKnowledge
@@ -50,6 +51,9 @@ class Governor(LoggingMixin):
         self.process_id = os.getpid()
         ident = self._generate_identifier()
         self.governor_id = f"{self.process_id}:{ident}"
+
+        # :class:`Process` name to aid with shutdown
+        self.etl_process_label = "ayeaye_etl_process"
 
         # managed shared memory has more convenient typing than multiprocessing.shared_memory
         self.mp_manager = multiprocessing.Manager()
@@ -166,9 +170,14 @@ class Governor(LoggingMixin):
             "isolated_processor": self.isolated_processor,
             "external_loggers": [copy.copy(logger) for logger in self.external_loggers],
             "log_to_stdout": self.log_to_stdout,
+            "etl_process_label": self.etl_process_label,
         }
 
-        governor_proc = multiprocessing.Process(target=Governor.run_forever, kwargs=pkwargs)
+        governor_proc = multiprocessing.Process(
+            target=Governor.run_forever,
+            kwargs=pkwargs,
+            name="governor_main",
+        )
         governor_proc.start()
         self._internal_process_table.append(governor_proc)
 
@@ -200,12 +209,12 @@ class Governor(LoggingMixin):
         isolated_processor,
         external_loggers,
         log_to_stdout,
+        etl_process_label,
     ):
         """
         The governor's own worker process. It manages running tasks and the communication with task
         queues.
         """
-
         logger = MiniLogger()
         logger.log_to_stdout = log_to_stdout
         for ext_log in external_loggers:
@@ -255,25 +264,30 @@ class Governor(LoggingMixin):
                     "partition_initialise_kwargs": task_spec.partition_initialise_kwargs,
                 }
 
-                process_table[task_spec.task_id] = {
-                    "task_spec": task_spec,
-                    "started": datetime.utcnow(),
-                }
-
                 # run the process. It communicates back to this governor process by putting it's
                 # results, exceptions etc. onto the work_queue.
                 # Note - isolated_processor is a callable
+                # These processes aren't put into the `process_table` as Processes aren't
+                # serialisable. Maintaining a separate local table is an option but would need
+                # a little work to keep it insync with `process_table`. Instead, label them
+                # just in case they need to be checked.
                 ayeaye_proc = multiprocessing.Process(
                     target=isolated_processor,
                     kwargs=iso_proc_kwargs,
+                    name=etl_process_label,
                 )
                 ayeaye_proc.start()
+                process_table[task_spec.task_id] = {
+                    "task_spec": task_spec,
+                    "started": datetime.utcnow(),
+                    "proc_id": ayeaye_proc.pid,
+                }
 
             elif isinstance(work_spec, ResultsMessage):
                 # this is the result of running a task
                 result_spec = work_spec
-
                 task_id = result_spec.task_id
+
                 process_details = process_table.get(task_id)
                 if process_details is None:
                     logger.log(f"Unknown task id [{task_id}], skipping callback", level="ERROR")
@@ -285,7 +299,7 @@ class Governor(LoggingMixin):
                 # These are the details of the task from before processing
                 task_spec = process_details["task_spec"]
 
-                logger.log(f"governor {governor_id} received completion message: {task_spec}")
+                logger.log(f"governor {governor_id} completion for: {task_id} : {task_spec}")
 
                 # either a fail or complete message
                 final_task_message = result_spec.task_message
@@ -362,3 +376,35 @@ class Governor(LoggingMixin):
         """
         # TODO check for collisions
         return self._generate_identifier()
+
+    def _terminate_etl_processes(self):
+        """
+        Signal based kill of any ETL processes still running at shutdown. This is to stop
+        orphaned but still running processes as they aren't daemons.
+        """
+        for proc_details in self.process_table.values():
+            os.kill(proc_details["proc_id"], signal.SIGTERM)
+
+    def shutdown(self, _server):
+        """
+        Terminate running processes managed by the governor. This includes internal processes and
+        any ETL tasks.
+
+        The unused `_server` arg is because this method is called by gunicorn which insists on this
+        argument.
+        """
+        self.log("stopping governor managed processes")
+
+        self._terminate_etl_processes()
+
+        for proc in self._internal_process_table:
+            if proc.is_alive():
+                proc.terminate()
+
+        for proc in self._internal_process_table:
+            proc.join()
+
+        # Note that ETL processes aren't explicitly killed. They
+
+        self.mp_manager.shutdown()
+        self.log("finished stopping governor processes")

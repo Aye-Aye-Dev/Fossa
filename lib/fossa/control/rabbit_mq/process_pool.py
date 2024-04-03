@@ -76,6 +76,8 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             # could be a complete, fail or log
             task_message = task_message_factory(body)
 
+            # TODO retry failed tasks a limited number of times
+
             if isinstance(task_message, (TaskComplete, TaskFailed)):
                 self.log(f"subtask_complete: {body}")
                 subtask_id = properties.correlation_id

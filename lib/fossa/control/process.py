@@ -2,6 +2,7 @@ import traceback
 import sys
 
 import ayeaye
+from ayeaye.exception import SubTaskFailed
 from ayeaye.runtime.task_message import TaskComplete, TaskFailed
 
 from fossa.control.message import ResultsMessage
@@ -109,6 +110,36 @@ class AbstractIsolatedProcessor(LoggingMixin):
                 task_message=task_complete.to_json(),
             )
 
+        except SubTaskFailed as e:
+            # This exception was probably raised by
+            # :meth:`ayeaye.PartitionedModel.partition_subtask_failed`
+            # Unless the subclass of :class:`PartitionedModel` overrides this method then it's
+            # a brutal death for the parent class on failure of any subtask.
+            # This process pool can have a re-try strategy for failed tasks as does the
+            # :class:`RabbitMqProcessPool`.
+
+            # originating :class:`TaskFailed` obj describing the failure in the subtask
+            subtask_task_failed = e.task_fail_message
+
+            task_failed = TaskFailed(
+                model_class_name=model_cls.__name__,
+                method_name=method,
+                method_kwargs=method_kwargs,
+                resolver_context=resolver_context,
+                exception_class_name=str(type(e)),
+                traceback=[],
+                model_construction_kwargs=model_construction_kwargs,
+                partition_initialise_kwargs=partition_initialise_kwargs,
+                task_id=task_id,
+                failure_origin_task_id=subtask_task_failed.task_id,  # link to failed subtask
+            )
+
+            # 'task_id' is the parent task. It is considered failed as a subtask has failed.
+            result_spec = ResultsMessage(
+                task_id=task_id,
+                task_message=task_failed.to_json(),
+            )
+
         except Exception as e:
             # TODO - recording the traceback is a bit rough
             _e_type, _e_value, e_traceback = sys.exc_info()
@@ -127,6 +158,7 @@ class AbstractIsolatedProcessor(LoggingMixin):
                 traceback=traceback_ln,
                 model_construction_kwargs=model_construction_kwargs,
                 partition_initialise_kwargs=partition_initialise_kwargs,
+                task_id=task_id,
             )
             result_spec = ResultsMessage(
                 task_id=task_id,

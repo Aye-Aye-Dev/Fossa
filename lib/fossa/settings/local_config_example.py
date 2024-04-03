@@ -7,6 +7,6 @@ class Config(BaseConfig):
     Example config. Copy and paste this as per the README
     """
 
-    DEBUG = True
+    DEBUG = False
     PREFERRED_URL_SCHEME = "http"
     ACCEPTED_MODEL_CLASSES = [NothingEtl]

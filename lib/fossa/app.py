@@ -15,7 +15,7 @@ def create_app(settings_class, governor):
     """
     Create a Flask app that can be run as a server
 
-    @param settings_class: (str) or Config class
+    @param settings_class: (str) or Config class or (dict)
         to settings. See Flask docs.
 
     @param governor: (:class:`` obj) - The Governor connects the web frontend; message brokers and
@@ -26,7 +26,11 @@ def create_app(settings_class, governor):
         The flask app for Fossa
     """
     app = Flask(__name__)
-    app.config.from_object(settings_class)
+
+    if isinstance(settings_class, dict):
+        app.config.from_mapping(settings_class)
+    else:
+        app.config.from_object(settings_class)
 
     app.fossa_governor = governor
 
@@ -79,8 +83,17 @@ def run_local_app():
     """
     Run app locally just for development, don't use this in production.
     """
+    import warnings
+
     settings = "fossa.settings.local_config.Config"
     app = single_config_initialise(settings)
+
+    if app.config["DEBUG"]:
+        msg = (
+            "In DEBUG mode, the flask internal web server runs this module twice. This will "
+            "result in two governor processes and a load of confusion."
+        )
+        warnings.warn(msg)
 
     app.run(
         debug=app.config["DEBUG"],

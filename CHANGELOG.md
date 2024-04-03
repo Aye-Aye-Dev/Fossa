@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.12] - 2024-04-03
+### Added
+- integration tests. Just local multiprocess Processes - it spits out a lot of rubbish. Maybe docker
+next for this.
+- some integration tests for expected runtime behaviour
+- signal based kill of running ETL processes when governor is shutdown
+- governor shutdown method which is run via a signal (so it can happen before gunicorn shutdown) or with gunicorn's 'on_exit' hook
+- task details page to web interface
+- task status attrib across API and web pages
+
+### Changed
+- create_app to also accept a dictionary config. Useful for the integration tests
+- AbstractIsolatedProcessor to propagate info about failed subtasks to the parent task
+- web interface layout - simplified, better layout for tracebacks and task dicts
+
 ## [0.0.11] - 2024-03-27
 ### Changed
 - RabbitMqProcessPool.run_subtasks to support upsteam Aye-aye change

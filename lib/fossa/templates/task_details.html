@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "macro.html" import display_task_results %}
+{% block body_content %}
+
+<h1>Task Details</h1>
+
+<table class="table table-striped">
+  <tbody>
+  {%for key,value in task.items()%}
+    <tr>
+      <th>{{key}}</th>
+      {%if key == 'results' %}
+      <td>{{display_task_results(value)}}</td>
+      {% else %}
+      <td>{{value}}</td>
+      {% endif %}
+    </tr>
+  {%endfor%}
+  </tbody>
+</table>
+
+
+
+{% endblock %}

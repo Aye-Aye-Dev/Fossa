@@ -7,7 +7,7 @@
 
 <h2>Node info</h2>
 
-<table class="table table-striped">
+<table class="table table-striped skinny-table">
   <tbody>
   {%for key,value in node_info.items()%}
     <tr>
@@ -25,22 +25,20 @@
   <thead>
     <tr>
       <th scope="col">Task Id</th>
+      <th scope="col">Status</th>
       <th scope="col">Started</th>
       <th scope="col">Model class</th>
       <th scope="col">Method</th>
-      <th scope="col">Method kwargs</th>
-      <th scope="col">Resolver context</th>
     </tr>
   </thead>
   <tbody>
   {%for t in running_tasks%}
     <tr>
-      <td>{{t.task_id}}</td>
+      <td><a href="{{ url_for('web.task_details', task_id=t.task_id) }}"/>{{t.task_id}}</a></td>
+      <td>{{t.status}}</td>
       <td>{{t.started}}</td>
       <td>{{t.model_class}}</td>
       <td>{{t.method}}</td>
-      <td>{{t.method_kwargs}}</td>
-      <td>{{t.resolver_context}}</td>
     </tr>
   {%endfor%}
   </tbody>
@@ -55,26 +53,22 @@
   <thead>
     <tr>
       <th scope="col">Task Id</th>
+      <th scope="col">Status</th>
       <th scope="col">Started</th>
       <th scope="col">Finished</th>
       <th scope="col">Model class</th>
       <th scope="col">Method</th>
-      <th scope="col">Method kwargs</th>
-      <th scope="col">Resolver context</th>
-      <th scope="col">Results</th>
     </tr>
   </thead>
   <tbody>
   {%for t in recent_completed_tasks%}
     <tr>
-      <td>{{t.task_id}}</td>
+      <td><a href="{{ url_for('web.task_details', task_id=t.task_id) }}"/>{{t.task_id}}</a></td>
+      <td>{{t.status}}</td>
       <td>{{t.started}}</td>
       <td>{{t.finished}}</td>
       <td>{{t.model_class}}</td>
       <td>{{t.method}}</td>
-      <td>{{t.method_kwargs}}</td>
-      <td>{{t.resolver_context}}</td>
-      <td>{{t.results}}</td>
     </tr>
   {%endfor%}
   </tbody>

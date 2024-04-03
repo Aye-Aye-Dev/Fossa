@@ -21,6 +21,22 @@ class LongRunningEtl(ayeaye.Model):
             time.sleep(10)
 
 
+class PartialFailure(ayeaye.PartitionedModel):
+    """
+    Create 4 pointless subtasks; one of the subtasks always fails. This model is used in tests.
+    """
+
+    def build(self):
+        pass
+
+    def partition_slice(self, _partition_count):
+        subtasks = [("do_something", {"subtask_id": task_id}) for task_id in range(4)]
+        return subtasks
+
+    def do_something(self, subtask_id):
+        return 1 / subtask_id
+
+
 class PartitionedExampleEtl(ayeaye.PartitionedModel):
     """
     Example task that can be split into independent subtasks.
