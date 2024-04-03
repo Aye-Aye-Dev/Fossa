@@ -4,7 +4,13 @@ import requests
 import signal
 import time
 
-from examples.example_etl import NothingEtl, LongRunningEtl, PartialFailure, PartitionedExampleEtl
+from examples.example_etl import (
+    NothingEtl,
+    LongRunningEtl,
+    PartialFailure,
+    PartitionedExampleEtl,
+    SecondTimeLucky,
+)
 from fossa import run_fossa
 from fossa.control.rabbit_mq.message_exchange import RabbitMx
 from fossa.control.rabbit_mq.process import RabbitMqProcessor
@@ -46,6 +52,7 @@ class OneNodeLocalEnvironment(FossaIntTest):
                 LongRunningEtl,
                 PartialFailure,
                 PartitionedExampleEtl,
+                SecondTimeLucky,
             ],
             ISOLATED_PROCESSOR=RabbitMqProcessor(broker_url=self.rabbmitmq_broker_url),
             MESSAGE_BROKER_MANAGERS=[RabbitMx(broker_url=self.rabbmitmq_broker_url)],

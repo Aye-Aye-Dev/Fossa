@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.13] - 2024-04-03
+### Added
+- retry on subtask fails to RabbitMqProcessPool
+
 ## [0.0.12] - 2024-04-03
 ### Added
 - integration tests. Just local multiprocess Processes - it spits out a lot of rubbish. Maybe docker

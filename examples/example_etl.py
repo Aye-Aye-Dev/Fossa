@@ -2,6 +2,7 @@ import hashlib
 import time
 
 import ayeaye
+from ayeaye.common_pattern.connect_helper import MultiConnectorNewDataset
 
 
 class NothingEtl(ayeaye.Model):
@@ -35,6 +36,38 @@ class PartialFailure(ayeaye.PartitionedModel):
 
     def do_something(self, subtask_id):
         return 1 / subtask_id
+
+
+class SecondTimeLucky(ayeaye.PartitionedModel):
+    """
+    Sub-tasks only succeed the second time they are run. This model is used by an integration test
+    to check failed task retries.
+    """
+
+    output_file_template = "csv://{output_datasets}/{subtask_id}_results.csv"
+    subtask_docs = ayeaye.Connect(
+        engine_url=[],
+        method_overlay=(MultiConnectorNewDataset(template=output_file_template), "new_doc"),
+        access=ayeaye.AccessMode.WRITE,
+    )
+
+    def build(self):
+        pass
+
+    def partition_slice(self, _partition_count):
+        subtasks = [("build_document", {"doc_name": d}) for d in ["a", "b", "c"]]
+        return subtasks
+
+    def build_document(self, doc_name):
+        doc = self.subtask_docs.new_doc(subtask_id=doc_name)
+
+        # if the data source doesn't exist, create it and throw an exception. The second time the
+        # subtask is run, the file will exist so no exception and subtask is considered a success.
+        throw_a_wobbly = not doc.datasource_exists
+
+        if throw_a_wobbly:
+            doc.add({"name": "hello_world"})
+            raise ValueError("Fake error")
 
 
 class PartitionedExampleEtl(ayeaye.PartitionedModel):

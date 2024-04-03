@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 import json
 import random
@@ -22,6 +23,8 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         self.rabbit_mq = BasicPikaClient(url=broker_url)
         self.tasks_in_flight = {}
         self.pool_id = "".join([random.choice(string.ascii_lowercase) for _ in range(5)])
+        self.task_retries = 1  # a retry is after the original subtask has failed
+        self.failed_tasks_scoreboard = []  # task_ids
 
     def run_subtasks(self, sub_tasks, context_kwargs=None, processes=None):
         """
@@ -75,16 +78,35 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
             # could be a complete, fail or log
             task_message = task_message_factory(body)
+            subtask_id = properties.correlation_id
 
-            # TODO retry failed tasks a limited number of times
+            if isinstance(task_message, TaskFailed):
+                # record this failure
+                self.failed_tasks_scoreboard.append(subtask_id)
 
-            if isinstance(task_message, (TaskComplete, TaskFailed)):
+                task_attempts = self.failed_tasks_scoreboard.count(subtask_id)
+                if task_attempts < self.task_retries + 1:
+                    # try it again, don't yield it
+                    # hmm, should this create a new subtask id?
+                    task_definition = copy.copy(self.tasks_in_flight[subtask_id])
+                    del task_definition["start_time"]
+                    task_definition_json = json.dumps(task_definition)
+                    self.send_task(subtask_id=subtask_id, task_payload=task_definition_json)
+
+                else:
+                    self.log(f"subtask_failed: {body}")
+                    if subtask_id in self.tasks_in_flight:
+                        del self.tasks_in_flight[subtask_id]
+
+                    yield task_message
+
+            elif isinstance(task_message, TaskComplete):
                 self.log(f"subtask_complete: {body}")
-                subtask_id = properties.correlation_id
+
                 if subtask_id in self.tasks_in_flight:
                     del self.tasks_in_flight[subtask_id]
 
-            yield task_message
+                yield task_message
 
             if len(self.tasks_in_flight) == 0:
                 self.log("All tasks complete")

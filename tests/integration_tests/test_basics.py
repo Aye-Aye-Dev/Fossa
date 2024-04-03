@@ -1,6 +1,8 @@
 import json
 import os
 import requests
+import shutil
+import tempfile
 import time
 import unittest
 
@@ -30,9 +32,54 @@ class TestFossaBasics(unittest.TestCase):
         http_port = self.fossa_integration_environment.http_port
         self.fossa_api_url = f"http://127.0.0.1:{http_port}/api/0.01/"
         self.api_headers = {"Content-type": "application/json"}
+        self._working_directory = None
 
     def tearDown(self):
         self.fossa_integration_environment.stop()
+        if self._working_directory and os.path.isdir(self._working_directory):
+            shutil.rmtree(self._working_directory)
+
+    def working_directory(self):
+        self._working_directory = tempfile.mkdtemp()
+        return self._working_directory
+
+    def wait_for_task_status(self, task_url, desired_status, negate=False):
+        """
+        @param desired_status: (str or list of str)
+            if None, return as soon as there is any status
+
+        @param negate: bool
+            any state *apart from* desired_state
+
+        @return: task's doc when the status == `desired_status`
+        """
+        if isinstance(desired_status, str):
+            _dstatus = [desired_status]
+        elif isinstance(desired_status, list):
+            _dstatus = desired_status
+        else:
+            raise ValueError("Unknown type")
+
+        while True:
+            r = requests.get(task_url)
+            task_doc = r.json()
+
+            if "status" not in task_doc:
+                # TODO - fix this work around upstream in Fossa. It happens when
+                # a new task is in the queue from web frontend to the governor.
+                time.sleep(0.1)
+                continue
+
+            if negate:
+                if task_doc["status"] in _dstatus:
+                    time.sleep(0.1)
+                    continue
+            else:
+                if task_doc["status"] not in _dstatus:
+                    time.sleep(0.1)
+                    continue
+
+            return task_doc
 
     def test_run_nothing_etl(self):
         """
@@ -51,22 +98,7 @@ class TestFossaBasics(unittest.TestCase):
         task_url = task_submit_doc["_metadata"]["links"]["task"]
         self.assertTrue(task_url.startswith(self.fossa_api_url))
 
-        while True:
-            r = requests.get(task_url)
-            task_doc = r.json()
-
-            if "status" not in task_doc:
-                # TODO - fix this work around upstream in Fossa. It happens when
-                # a new task is in the queue from web frontend to the governor.
-                time.sleep(0.1)
-                continue
-
-            elif task_doc["status"] == "running":
-                time.sleep(0.1)
-                continue
-            elif task_doc["status"] == "complete":
-                break
-
+        task_doc = self.wait_for_task_status(task_url, "complete")
         self.assertIn("finished", task_doc)
 
     def test_terminates_running_etls(self):
@@ -85,19 +117,7 @@ class TestFossaBasics(unittest.TestCase):
         task_submit_doc = r.json()
         task_url = task_submit_doc["_metadata"]["links"]["task"]
 
-        # Wait for the task to be running
-        while True:
-            task_doc = requests.get(task_url).json()
-            if "status" not in task_doc:
-                # TODO - fix this work around upstream in Fossa. It happens when
-                # a new task is in the queue from web frontend to the governor.
-                time.sleep(0.1)
-                continue
-
-            elif task_doc["status"] != "running":
-                time.sleep(0.1)
-                continue
-            break
+        _task_doc = self.wait_for_task_status(task_url, "running")
 
         # Ideally, fossa's _terminate_etl_processes() would be run here
         # instead, this test terminating without any hanging processes should be enough of a test
@@ -120,20 +140,7 @@ class TestFossaBasics(unittest.TestCase):
         task_submit_doc = r.json()
         task_url = task_submit_doc["_metadata"]["links"]["task"]
 
-        # Wait for the task to be running
-        while True:
-            task_doc = requests.get(task_url).json()
-            if "status" not in task_doc:
-                # TODO - fix this work around upstream in Fossa. It happens when
-                # a new task is in the queue from web frontend to the governor.
-                time.sleep(0.1)
-                continue
-
-            elif task_doc["status"] == "running":
-                time.sleep(0.1)
-                continue
-            else:
-                break
+        task_doc = self.wait_for_task_status(task_url, "running", negate=True)
 
         self.assertEqual("failed", task_doc["status"])
 
@@ -145,3 +152,28 @@ class TestFossaBasics(unittest.TestCase):
             "<class 'ZeroDivisionError'>",
             failed_task_doc["results"]["payload"]["exception_class_name"],
         )
+
+    def test_retry_on_failed_subtask(self):
+        """
+        Each subtask in SecondTimeLucky will fail the first time it's run and succeed the second
+        time.
+        """
+        working_space = self.working_directory()
+
+        fossa_command = {
+            "model_class": "SecondTimeLucky",
+            "resolver_context": {"output_datasets": working_space},
+        }
+        r = requests.post(
+            self.fossa_api_url + "task",
+            data=json.dumps(fossa_command),
+            headers=self.api_headers,
+        )
+
+        self.assertEqual(200, r.status_code)
+
+        task_submit_doc = r.json()
+        task_url = task_submit_doc["_metadata"]["links"]["task"]
+
+        task_doc = self.wait_for_task_status(task_url, ["failed", "complete"])
+        self.assertEqual("complete", task_doc["status"])
