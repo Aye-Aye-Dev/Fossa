@@ -5,8 +5,9 @@ import signal
 import time
 
 from examples.example_etl import (
-    NothingEtl,
     LongRunningEtl,
+    HalfSecondEtl,
+    NothingEtl,
     PartialFailure,
     PartitionedExampleEtl,
     SecondTimeLucky,
@@ -53,6 +54,7 @@ class OneNodeLocalEnvironment(FossaIntTest):
                 PartialFailure,
                 PartitionedExampleEtl,
                 SecondTimeLucky,
+                HalfSecondEtl,
             ],
             ISOLATED_PROCESSOR=RabbitMqProcessor(broker_url=self.rabbmitmq_broker_url),
             MESSAGE_BROKER_MANAGERS=[RabbitMx(broker_url=self.rabbmitmq_broker_url)],

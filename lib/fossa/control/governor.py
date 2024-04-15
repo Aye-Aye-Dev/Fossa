@@ -7,6 +7,7 @@ import os
 import random
 import signal
 import string
+import time
 
 from ayeaye.runtime.knowledge import RuntimeKnowledge
 
@@ -248,7 +249,7 @@ class Governor(LoggingMixin):
                 if task_spec.model_class not in available_classes:
                     # Throwing an exception seems pretty extreme for what is expected to be a long
                     # running method but it's a coding mistake for a task to be in the pipe without
-                    # being sanatised by :meth:`submit_task`.
+                    # being sanitised by :meth:`submit_task`.
                     msg = f"Model class '{task_spec.model_class}' is not an accepted class"
                     raise InvalidTaskSpec(msg)
 
@@ -343,12 +344,23 @@ class Governor(LoggingMixin):
 
         self.accepted_classes[model_name] = model_cls
 
-    def submit_task(self, task_spec):
+    def submit_task(self, task_spec, blocking=False):
         """
-        To avoid a race condition this method doesn't check for capacity. Users of this
-        method should check :meth:`has_processing_capacity`
+        Pass a task across to the governor.
+
+        The task is passed via a queue but the queue isn't intended as a store of tasks, it's
+        just for the transit between processes. This makes a race condition possible and there
+        are scenarios when this method will return None (i.e. no available capacity) when there
+        is capacity and vice versa.
+
+
+        The 'blocking=False' argument will reduce the chance of a race condition whilst also
+        returning within a reasonable time (currently 1000 msec).
 
         @param task_spec: (TaskMessage)
+        @param blocking: (boolean) - when True, wait for capacity. When False, return None
+                if the task couldn't be accepted because the governor is at full processing
+                capacity.
         @return: (str) identifier for the governor process that accepted the task
         """
         if not isinstance(task_spec, TaskMessage):
@@ -357,6 +369,33 @@ class Governor(LoggingMixin):
         if task_spec.model_class not in self.accepted_classes:
             msg = f"Model class '{task_spec.model_class}' is not in the list of accepted classes."
             raise InvalidTaskSpec(msg)
+
+        if not blocking:
+            max_timeout = 1.0  # sec
+
+            if self.available_processing_capacity.value < 1:
+                # No spare capacity
+                return None
+
+            start_time = time.time()
+
+            while time.time() - start_time < max_timeout:
+                if (
+                    self.available_processing_capacity.value >= 1
+                    and self._task_queue_submit.empty()
+                ):
+                    self._task_queue_submit.put(task_spec)
+                    return self.governor_id
+
+                collision_reduction = random.random()
+                time.sleep(0.2 * collision_reduction)
+
+            return None
+
+        # Blocking mode
+        while self.available_processing_capacity.value < 1 or not self._task_queue_submit.empty():
+            collision_reduction = random.random()
+            time.sleep(0.2 * collision_reduction)
 
         self._task_queue_submit.put(task_spec)
         return self.governor_id

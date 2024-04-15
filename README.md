@@ -120,3 +120,7 @@ curl --header "Content-Type: application/json" \
      --data '{"model_class":"PartitionedExampleEtl"}'  \
      --request POST http://0.0.0.0:2345/api/0.01/task
 ```
+
+### Tests
+
+The normal unittests will run with the `` command detailed above. There are also some integration tests in an early stage of development. They are message and output a lot of rubbish to the console. Enable them by supplying a RabbitMQ broker through an environmental variable. e.g. `export RABBITMQ_URL=amqp://guest:guest@localhost`.

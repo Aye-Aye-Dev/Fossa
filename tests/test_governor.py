@@ -45,6 +45,9 @@ class TestGovernor(BaseTest):
         self.assertIn("already exists as an accepted class", str(context.exception))
 
     def test_submit_task(self):
+        # faker
+        self.governor.available_processing_capacity.value = 1
+
         task_spec = TaskMessage(
             model_class="NothingEtl",
             method="go",

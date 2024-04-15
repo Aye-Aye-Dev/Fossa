@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.14] - 2024-04-15
+### Changed
+- broker and governor's :meth:`sub_task` to dramatically reduce the chance of a node accepting task
+s over it's maximum or rejecting tasks when not yet at capacity. There is still a small race condition but
+ the new approach is enough for now.
+
+### Fixed
+- api's /node_info/ was attempting to serialise a callback method
+
 ## [0.0.13] - 2024-04-03
 ### Added
 - retry on subtask fails to RabbitMqProcessPool

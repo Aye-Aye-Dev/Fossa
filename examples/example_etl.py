@@ -22,6 +22,15 @@ class LongRunningEtl(ayeaye.Model):
             time.sleep(10)
 
 
+class HalfSecondEtl(ayeaye.Model):
+    "Just long enough for checking the execution lifecycle"
+
+    def build(self):
+        self.log("Running HalfSecondEtl...")
+        time.sleep(0.5)
+        self.log("Finishing HalfSecondEtl...")
+
+
 class PartialFailure(ayeaye.PartitionedModel):
     """
     Create 4 pointless subtasks; one of the subtasks always fails. This model is used in tests.

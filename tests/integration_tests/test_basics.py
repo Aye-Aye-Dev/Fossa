@@ -177,3 +177,72 @@ class TestFossaBasics(unittest.TestCase):
 
         task_doc = self.wait_for_task_status(task_url, ["failed", "complete"])
         self.assertEqual("complete", task_doc["status"])
+
+    def test_exceeds_available_processing_capacity(self):
+        """
+        This could end up as a flaky test as this is really a race condition.
+
+        It's caused by many writes to the governor's task queue before the governor is able to
+        process items on the queue.
+        """
+
+        fossa_command = {"model_class": "HalfSecondEtl"}
+
+        start = time.time()
+        loop_time = 0.5  # time given to inject tasks
+        tasks_added = 0
+        tasks_rejected = 0
+        while time.time() < start + loop_time:
+            r = requests.post(
+                self.fossa_api_url + "task",
+                data=json.dumps(fossa_command),
+                headers=self.api_headers,
+            )
+            if r.status_code == 200:
+                tasks_added += 1
+            elif r.status_code == 503:
+                tasks_rejected += 1
+            else:
+                raise ValueError(f"Unexpected status code: {r.status_code}")
+
+        print(f"accepted: {tasks_added}  rejected: {tasks_rejected}")
+        self.assertGreater(tasks_added, 0, "Zero tasks accepted")
+
+        r = requests.get(self.fossa_api_url + "node_info")
+        node_info = r.json()
+        concurrent_allowed = node_info["node_info"]["max_concurrent_tasks"]
+
+        msg = (
+            "POST loop not fast enough for this test. The time given by 'loop_time' wasn't "
+            "enough to generate enough tasks to give fossa the opportunity to get it wrong and "
+            "run too many tasks."
+        )
+        self.assertGreater(tasks_added + tasks_rejected, concurrent_allowed, msg)
+
+        msg = (
+            "Should only accept/run 'max_concurrent_tasks' capacity tasks in half a second. "
+            f"accepted: {tasks_added} rejected: {tasks_rejected} allowed: {concurrent_allowed}"
+        )
+        # Add a bit of tolerance around a small race condition that will be fixed in time.
+        # The race condition allows for a slight under or over allocation of tasks
+        tolerance = 0
+        self.assertLessEqual(tasks_added, concurrent_allowed + tolerance, msg)
+
+        max_concurrent_tasks = 0
+        while True:
+            node_info = requests.get(self.fossa_api_url + "node_info").json()
+            concurrent_tasks = len(node_info["running_tasks"])
+            print(concurrent_tasks)
+
+            if concurrent_tasks == 0:
+                # all tasks complete
+                break
+
+            max_concurrent_tasks = max(max_concurrent_tasks, concurrent_tasks)
+            time.sleep(0.1)
+
+        msg = (
+            f"Concurrent tasks peaked at {max_concurrent_tasks}, max concurrent is "
+            f"{concurrent_allowed}"
+        )
+        self.assertGreaterEqual(concurrent_allowed + tolerance, max_concurrent_tasks, msg)

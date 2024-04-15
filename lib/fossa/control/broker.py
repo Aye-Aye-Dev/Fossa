@@ -1,3 +1,4 @@
+import random
 import time
 
 from fossa.control.message import TaskMessage
@@ -9,7 +10,7 @@ class AbstractMycorrhiza(LoggingMixin):
     A separate 'sidecar' process that is attached to the :class:`Governor` primarily to inject
     work tasks.
 
-    The objective for sidecars are to (i) take details on sub-tasks that need to be run from an
+    The objective for sidecars is to (i) fetch details of sub-tasks that need to be run from an
     external source (e.g. a messaging service) (ii) send the sub-task to the governor to run
     and (iii) send results back to the originating task (iv) send log messages somewhere useful.
 
@@ -17,7 +18,7 @@ class AbstractMycorrhiza(LoggingMixin):
     task queue onto which it submits subtasks. It is also provided with a shared variable used to
     indicate if the governor has capacity to accept additional work.
 
-    Just before execution of the sidecar starts the govenor will attach external logger modules
+    Just before execution of the sidecar starts, the govenor will attach external logger modules
     if there are any. Log messages from sidecars are separate from the log messages generated
     by models.
     """
@@ -57,8 +58,13 @@ class AbstractMycorrhiza(LoggingMixin):
         if not isinstance(task_spec, TaskMessage):
             raise ValueError("task_spec must be of type TaskMessage")
 
-        # TODO - proper sync primative in the governor
-        while available_processing_capacity.value < 1:
-            time.sleep(2)
+        # TODO - proper sync primitive in the governor
+        # .qsize() isn't available on OSX, it's a proxy anyway so not worth pursuing
+        # the empty check is enough for now to reduce the chance of running more
+        # tasks then `available_processing_capacity`.
+
+        while available_processing_capacity.value < 1 or not work_queue_submit.empty():
+            collision_reduction = random.random()
+            time.sleep(0.2 * collision_reduction)
 
         work_queue_submit.put(task_spec)
