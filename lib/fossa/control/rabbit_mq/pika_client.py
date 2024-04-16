@@ -59,6 +59,7 @@ class BasicPikaClient:
                 break
 
             self.channel = self.connection.channel()
+            self.channel.basic_qos(prefetch_count=1)
             self.channel.queue_declare(queue=self.task_queue_name, durable=True)
             self._queue_init_flag = True
 

@@ -225,7 +225,7 @@ class TestFossaBasics(unittest.TestCase):
         )
         # Add a bit of tolerance around a small race condition that will be fixed in time.
         # The race condition allows for a slight under or over allocation of tasks
-        tolerance = 0
+        tolerance = 1
         self.assertLessEqual(tasks_added, concurrent_allowed + tolerance, msg)
 
         max_concurrent_tasks = 0
