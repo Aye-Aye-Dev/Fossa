@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.16] - 2024-04-22
+### Fixed
+- failure to return after subtasks complete
+
 ## [0.0.15] - 2024-04-16
 ### Fixed
 - RabbitMQ was prefetching all the work tasks making it impossible to change the number of workers after a task is start.

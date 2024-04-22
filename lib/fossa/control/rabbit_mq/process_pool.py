@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import random
 import string
+import time
 
 from ayeaye.runtime.multiprocess import AbstractProcessPool
 from ayeaye.runtime.task_message import task_message_factory, TaskComplete, TaskFailed
@@ -25,6 +26,11 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         self.pool_id = "".join([random.choice(string.ascii_lowercase) for _ in range(5)])
         self.task_retries = 1  # a retry is after the original subtask has failed
         self.failed_tasks_scoreboard = []  # task_ids
+
+        # When all tasks are complete OR when a subtask or it's results are lost this timeout
+        # allows the main wait loop to run.
+        # TODO retry if a task takes x percent longer than the slowest known task
+        self.inactivity_timeout = 3.0
 
     def run_subtasks(self, sub_tasks, context_kwargs=None, processes=None):
         """
@@ -62,18 +68,29 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
         for _not_connected in self.rabbit_mq.connect():
             self.log("Waiting to connect to RabbitMQ....", "WARNING")
-        self.log("Connected to RabbitMQ")
+
+        # reduce repetitive log messages
+        max_log_seconds = 20
+        last_logged = 0
 
         # Listen for subtasks completing
-        self.log(f"Waiting on {self.rabbit_mq.reply_queue} ....")
-
-        # TODO inactivity_timeout (float) – if a number is given (in seconds), will cause the
-        # method to yield (None, None, None) after the given period of inactivity;
-        # use this to re-issue lost tasks
-        for _method, properties, body in self.rabbit_mq.channel.consume(
+        self.log(f"Connected to RabbitMQ, now waiting on {self.rabbit_mq.reply_queue} ....")
+        for method, properties, body in self.rabbit_mq.channel.consume(
             queue=self.rabbit_mq.reply_queue,
             auto_ack=True,
+            inactivity_timeout=self.inactivity_timeout,
         ):
+            if len(self.tasks_in_flight) == 0:
+                self.log("All tasks complete")
+                return
+
+            if method is None and properties is None and body is None:
+                # on inactivity_timeout
+                if last_logged < time.time() - max_log_seconds:
+                    in_flight_count = len(self.tasks_in_flight)
+                    self.log(f"Waiting on {in_flight_count} tasks to complete...")
+                    last_logged = time.time()
+
             # 'reply_queue' message is received.
 
             # could be a complete, fail or log
@@ -87,30 +104,38 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 task_attempts = self.failed_tasks_scoreboard.count(subtask_id)
                 if task_attempts < self.task_retries + 1:
                     # try it again, don't yield it
-                    # hmm, should this create a new subtask id?
+                    self.log(f"Failed subtask {subtask_id} is being retried", "WARNING")
+
                     task_definition = copy.copy(self.tasks_in_flight[subtask_id])
                     del task_definition["start_time"]
                     task_definition_json = json.dumps(task_definition)
                     self.send_task(subtask_id=subtask_id, task_payload=task_definition_json)
 
                 else:
-                    self.log(f"subtask_failed: {body}")
+                    self.log(f"Subtask {subtask_id} failed: {body}")
                     if subtask_id in self.tasks_in_flight:
                         del self.tasks_in_flight[subtask_id]
+                    else:
+                        msg = f"Failed task:{subtask_id} not in in-flight list so not re-tried"
+                        self.log(msg, "WARNING")
 
                     yield task_message
 
             elif isinstance(task_message, TaskComplete):
-                self.log(f"subtask_complete: {body}")
-
                 if subtask_id in self.tasks_in_flight:
+                    elapsed = datetime.utcnow() - self.tasks_in_flight[subtask_id]["start_time"]
+                    elapsed_s = elapsed.total_seconds()
+                    self.log(f"Subtask {subtask_id} complete. Took {elapsed_s} seconds. {body}")
                     del self.tasks_in_flight[subtask_id]
+                else:
+                    self.log(f"Complete task {subtask_id} not found in in-flight list", "WARNING")
 
                 yield task_message
 
-            if len(self.tasks_in_flight) == 0:
-                self.log("All tasks complete")
-                return
+            else:
+                msg_type = str(type(task_message))
+                msg = f"Unknown message type {msg_type} received with subtask_id: {subtask_id} : {body}"
+                self.log(msg, "ERROR")
 
     def send_task(self, subtask_id, task_payload):
         """

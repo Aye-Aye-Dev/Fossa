@@ -75,14 +75,15 @@ class RabbitMx(AbstractMycorrhiza):
         self.log("Connected to RabbitMQ")
 
         composite_task_id = task_spec.task_id
-        correlation_id, reply_to = composite_task_id.split("::", maxsplit=1)
+        subtask_id, reply_to = composite_task_id.split("::", maxsplit=1)
 
-        self.log(f"processing complete for {correlation_id}")
+        msg = f"Processing of subtask_id:{subtask_id} is complete, sending result to {reply_to}"
+        self.log(msg)
 
         rabbit_mq.channel.basic_publish(
             exchange="",
             routing_key=reply_to,
-            properties=pika.BasicProperties(correlation_id=correlation_id),
+            properties=pika.BasicProperties(correlation_id=subtask_id),
             body=final_task_message,
         )
-        self.log(f"reply complete for {correlation_id}")
+        self.log(f"reply complete for {subtask_id}")
