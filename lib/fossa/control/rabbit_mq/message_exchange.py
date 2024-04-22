@@ -1,4 +1,5 @@
 import json
+import time
 
 import pika
 
@@ -31,36 +32,46 @@ class RabbitMx(AbstractMycorrhiza):
         super().__init__(*args, **kwargs)
 
     def run_forever(self, work_queue_submit, available_processing_capacity):
-        "Runs in a separate Process"
+        """
+        Take a task received from RabbitMq exchange and pass it to the local governor.
 
-        rabbit_mq = BasicPikaClient(url=self.broker_url)
-        for _not_connected in rabbit_mq.connect():
-            self.log("Waiting to connect to RabbitMQ....", "WARNING")
-        self.log("Connected to RabbitMQ")
+        Runs in a separate Process
+        """
 
-        rabbit_mq.channel.basic_qos(prefetch_count=1)
+        while True:
+            try:
+                rabbit_mq = BasicPikaClient(url=self.broker_url)
+                for _not_connected in rabbit_mq.connect():
+                    self.log("Waiting to connect to RabbitMQ....", "WARNING")
+                self.log("Connected to RabbitMQ")
 
-        self.log("RabbitMx starting .. waiting for messages ...")
-        rabbit_mq.channel.start_consuming()
-        for _method, properties, body in rabbit_mq.channel.consume(
-            queue=rabbit_mq.task_queue_name,
-            auto_ack=True,
-        ):
-            msg = f"exchange received {body} {properties.correlation_id} -> {properties.reply_to}"
-            self.log(msg)
+                self.log("RabbitMx starting .. waiting for messages ...")
+                rabbit_mq.channel.start_consuming()
+                for _method, properties, body in rabbit_mq.channel.consume(
+                    queue=rabbit_mq.task_queue_name,
+                    auto_ack=True,
+                ):
+                    subtask_id = properties.correlation_id
+                    msg = f"Exchange received subtask_id: {subtask_id} from {properties.reply_to}"
+                    self.log(msg)
 
-            # TODO use proper types
-            rabbit_decoded_task = json.loads(body)
+                    # TODO use proper types
+                    rabbit_decoded_task = json.loads(body)
 
-            # keep track of where the sub-task's work should be sent.
-            composite_task_id = f"{properties.correlation_id}::{properties.reply_to}"
-            task_spec = TaskMessage(
-                task_id=composite_task_id,
-                **rabbit_decoded_task,
-                on_completion_callback=self.callback_on_processing_complete,
-            )
+                    # keep track of where the sub-task's work should be sent.
+                    composite_task_id = f"{subtask_id}::{properties.reply_to}"
+                    task_spec = TaskMessage(
+                        task_id=composite_task_id,
+                        **rabbit_decoded_task,
+                        on_completion_callback=self.callback_on_processing_complete,
+                    )
 
-            RabbitMx.submit_task(task_spec, work_queue_submit, available_processing_capacity)
+                    RabbitMx.submit_task(
+                        task_spec, work_queue_submit, available_processing_capacity
+                    )
+            except Exception as e:
+                self.log(f"Restarting after exception in RabbitMQ exchange: {e}", "ERROR")
+                time.sleep(5)
 
     def callback_on_processing_complete(self, final_task_message, task_spec):
         """

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.19] - 2024-04-22
+### Added
+- improvement around task acceptance stampede, really needs a semaphore
+
+### Changed
+- RabbitMx.run_forever to restart on connection failure
+
 ## [0.0.18] - 2024-04-22
 ### Fixed
 - was passing empty arguments in main loop on inactivity timeout

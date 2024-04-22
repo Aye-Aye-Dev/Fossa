@@ -63,6 +63,8 @@ class AbstractMycorrhiza(LoggingMixin):
         # the empty check is enough for now to reduce the chance of running more
         # tasks then `available_processing_capacity`.
 
+        collision_reduction = random.random()
+        time.sleep(0.2 * collision_reduction)
         while available_processing_capacity.value < 1 or not work_queue_submit.empty():
             collision_reduction = random.random()
             time.sleep(0.2 * collision_reduction)
