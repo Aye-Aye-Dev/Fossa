@@ -91,6 +91,9 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                     self.log(f"Waiting on {in_flight_count} tasks to complete...")
                     last_logged = time.time()
 
+                # inactivity timeout doesn't yield a message
+                continue
+
             # 'reply_queue' message is received.
 
             # could be a complete, fail or log
