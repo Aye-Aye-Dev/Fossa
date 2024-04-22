@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.20] - 2024-04-22
+### Added
+- reduced log outputs when waiting on tasks
+- extra details on tasks that are being waited on
+
+### Fixed
+- removed stray rabbit_mq.channel.start_consuming() call, not needed in blocking iterator
+
 ## [0.0.19] - 2024-04-22
 ### Added
 - improvement around task acceptance stampede, really needs a semaphore

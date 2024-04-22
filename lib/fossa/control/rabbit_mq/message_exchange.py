@@ -46,7 +46,6 @@ class RabbitMx(AbstractMycorrhiza):
                 self.log("Connected to RabbitMQ")
 
                 self.log("RabbitMx starting .. waiting for messages ...")
-                rabbit_mq.channel.start_consuming()
                 for _method, properties, body in rabbit_mq.channel.consume(
                     queue=rabbit_mq.task_queue_name,
                     auto_ack=True,

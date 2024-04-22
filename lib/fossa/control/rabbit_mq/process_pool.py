@@ -70,7 +70,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             self.log("Waiting to connect to RabbitMQ....", "WARNING")
 
         # reduce repetitive log messages
-        max_log_seconds = 20
+        max_log_seconds = 60
         last_logged = 0
 
         # Listen for subtasks completing
@@ -89,6 +89,13 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 if last_logged < time.time() - max_log_seconds:
                     in_flight_count = len(self.tasks_in_flight)
                     self.log(f"Waiting on {in_flight_count} tasks to complete...")
+
+                    task_ids = ",".join([t for t in self.tasks_in_flight.keys()])
+                    max_output = 1024
+                    if len(task_ids) > max_output:
+                        task_ids = task_ids[0:max_output] + "..."
+                    self.log(f"Slow task_ids are: {task_ids}", "DEBUG")
+
                     last_logged = time.time()
 
                 # inactivity timeout doesn't yield a message
