@@ -46,9 +46,8 @@ class RabbitMx(AbstractMycorrhiza):
                 self.log("Connected to RabbitMQ")
 
                 self.log("RabbitMx starting .. waiting for messages ...")
-                for _method, properties, body in rabbit_mq.channel.consume(
-                    queue=rabbit_mq.task_queue_name,
-                    auto_ack=True,
+                for method, properties, body in rabbit_mq.channel.consume(
+                    queue=rabbit_mq.task_queue_name
                 ):
                     subtask_id = properties.correlation_id
                     msg = f"Exchange received subtask_id: {subtask_id} from {properties.reply_to}"
@@ -68,6 +67,9 @@ class RabbitMx(AbstractMycorrhiza):
                     RabbitMx.submit_task(
                         task_spec, work_queue_submit, available_processing_capacity
                     )
+
+                    rabbit_mq.channel.basic_ack(delivery_tag=method.delivery_tag)
+
             except Exception as e:
                 self.log(f"Restarting after exception in RabbitMQ exchange: {e}", "ERROR")
                 time.sleep(5)

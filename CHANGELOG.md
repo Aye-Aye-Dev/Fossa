@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.21] - 2024-04-23
+### Changed
+- oops, RabbitMq shouldn't have been using auto-ack, wrong tradeoff, not reliable enough
+
 ## [0.0.20] - 2024-04-22
 ### Added
 - reduced log outputs when waiting on tasks

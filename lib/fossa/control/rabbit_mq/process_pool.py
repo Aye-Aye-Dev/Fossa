@@ -39,10 +39,6 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
         @see doc. string in :meth:`AbstractProcessPool.run_subtasks`
         """
-        if processes is None:
-            # if the count of processes is used to distribute the workers this will work
-            processes = len(sub_tasks)
-
         # fortunately sub_tasks is a list (not a generator) so all tasks can be sent
         for subtask_number, sub_task in enumerate(sub_tasks):
             # sub_task is a :class:`TaskPartition` object
@@ -77,7 +73,6 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         self.log(f"Connected to RabbitMQ, now waiting on {self.rabbit_mq.reply_queue} ....")
         for method, properties, body in self.rabbit_mq.channel.consume(
             queue=self.rabbit_mq.reply_queue,
-            auto_ack=True,
             inactivity_timeout=self.inactivity_timeout,
         ):
             if len(self.tasks_in_flight) == 0:
@@ -94,7 +89,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                     max_output = 1024
                     if len(task_ids) > max_output:
                         task_ids = task_ids[0:max_output] + "..."
-                    self.log(f"Slow task_ids are: {task_ids}", "DEBUG")
+                    self.log(f"Waiting on task_ids: {task_ids}", "DEBUG")
 
                     last_logged = time.time()
 
@@ -102,6 +97,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 continue
 
             # 'reply_queue' message is received.
+            self.rabbit_mq.channel.basic_ack(delivery_tag=method.delivery_tag)
 
             # could be a complete, fail or log
             task_message = task_message_factory(body)
@@ -167,4 +163,6 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 content_type="application/json",
                 correlation_id=subtask_id,
             ),
+            # mandatory=True,
         )
+        self.log(f"Subtask: {subtask_id} has been sent to RabbitMq exchange", "DEBUG")

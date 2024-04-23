@@ -4,6 +4,10 @@ import time
 import pika
 
 
+# def failure_to_publish_callback(channel, method, properties, body):
+#     print("X" * 2000, channel, method, properties, body)
+
+
 class BasicPikaClient:
     def __init__(self, url):
         """
@@ -62,6 +66,8 @@ class BasicPikaClient:
             self.channel.basic_qos(prefetch_count=1)
             self.channel.queue_declare(queue=self.task_queue_name, durable=True)
             self._queue_init_flag = True
+
+            # self.channel.add_on_return_callback(failure_to_publish_callback)
 
     @property
     def reply_queue(self):
