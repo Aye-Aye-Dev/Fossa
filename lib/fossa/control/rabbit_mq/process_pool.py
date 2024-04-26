@@ -107,11 +107,18 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 # record this failure
                 self.failed_tasks_scoreboard.append(subtask_id)
 
+                if subtask_id not in self.tasks_in_flight:
+                    msg = (
+                        f"Failed subtask {subtask_id} is not registered as in flight so "
+                        "must have already been completed"
+                    )
+                    self.log(msg, "WARNING")
+                    continue
+
                 task_attempts = self.failed_tasks_scoreboard.count(subtask_id)
                 if task_attempts < self.task_retries + 1:
                     # try it again, don't yield it
                     self.log(f"Failed subtask {subtask_id} is being retried", "WARNING")
-
                     task_definition = copy.copy(self.tasks_in_flight[subtask_id])
                     del task_definition["start_time"]
                     task_definition_json = json.dumps(task_definition)
@@ -121,9 +128,6 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                     self.log(f"Subtask {subtask_id} failed: {body}")
                     if subtask_id in self.tasks_in_flight:
                         del self.tasks_in_flight[subtask_id]
-                    else:
-                        msg = f"Failed task:{subtask_id} not in in-flight list so not re-tried"
-                        self.log(msg, "WARNING")
 
                     yield task_message
 
