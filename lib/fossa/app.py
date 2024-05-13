@@ -54,6 +54,9 @@ def single_config_initialise(flask_config):
     run mode.
 
     @param flask_config: (anything accepted by Flask's `app.config.from_object`)
+            Ideally, use :class:`fossa.settings.global_config.BaseConfig` as the superclass for
+            your config as it contains useful defaults. It's also worth looking at as there
+            are notes on common config values.
     @return: Flask app
     """
     governor = Governor()
@@ -73,6 +76,11 @@ def single_config_initialise(flask_config):
 
     for callable_manager in app.config.get("MESSAGE_BROKER_MANAGERS"):
         governor.attach_sidecar(callable_manager)
+
+    runtime_config = app.config.get("RUNTIME", {})
+    if "CPU_TASK_RATIO" in runtime_config:
+        # number of tasks to run in parallel on each CPU
+        governor.runtime.cpu_task_ratio = runtime_config["CPU_TASK_RATIO"]
 
     governor.start_internal_processes()
 

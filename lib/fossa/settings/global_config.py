@@ -8,3 +8,8 @@ class BaseConfig:
     MESSAGE_BROKER_MANAGERS = []  # subclasses of  to run in a separate process
     EXTERNAL_LOGGERS = []  # subclasses of
     LOG_TO_STDOUT = True  # i.e. print out log messages
+
+    # dictionary of options for modifying :class:`ayeaye.runtime.knowledge.RuntimeKnowledge`
+    # options-
+    # "CPU_TASK_RATIO" - number of tasks to run in parallel on each CPU
+    RUNTIME = None

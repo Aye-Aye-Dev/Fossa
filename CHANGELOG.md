@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.23] - 2024-05-13
+### Added
+- CPU_TASK_RATIO to config options
+
 ## [0.0.22] - 2024-04-26
 ### Fixed
 - missing test for in flight task id on subtask fail
