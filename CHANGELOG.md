@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.24] - 2024-05-14
+### Fixed
+- "Stream connection lost: BrokenPipeError(32, 'Broken pipe')" from RabbitMq with long running tasks
+where ACK was too slow.
+
 ## [0.0.23] - 2024-05-13
 ### Added
 - CPU_TASK_RATIO to config options

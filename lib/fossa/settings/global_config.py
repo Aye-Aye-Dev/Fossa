@@ -12,4 +12,4 @@ class BaseConfig:
     # dictionary of options for modifying :class:`ayeaye.runtime.knowledge.RuntimeKnowledge`
     # options-
     # "CPU_TASK_RATIO" - number of tasks to run in parallel on each CPU
-    RUNTIME = None
+    RUNTIME = {}

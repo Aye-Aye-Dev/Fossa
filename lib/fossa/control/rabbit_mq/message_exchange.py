@@ -64,11 +64,17 @@ class RabbitMx(AbstractMycorrhiza):
                         on_completion_callback=self.callback_on_processing_complete,
                     )
 
+                    # avoidance of blocking condition - the message is being acked before the
+                    # governor has accepted the task.
+                    rabbit_mq.channel.basic_ack(delivery_tag=method.delivery_tag)
+
+                    # This message must wait until RabbitMx.submit_task has found capacity.
+                    # the alternative is to stop using rabbit_mq.channel.consume and check
+                    # available_processing_capacity before explicitly taking a message from
+                    # rabbitmq. But this is still a race condition so sticking with this pattern.
                     RabbitMx.submit_task(
                         task_spec, work_queue_submit, available_processing_capacity
                     )
-
-                    rabbit_mq.channel.basic_ack(delivery_tag=method.delivery_tag)
 
             except Exception as e:
                 self.log(f"Restarting after exception in RabbitMQ exchange: {e}", "ERROR")
