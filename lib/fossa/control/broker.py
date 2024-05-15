@@ -53,6 +53,7 @@ class AbstractMycorrhiza(LoggingMixin):
         Wait for processing capacity in the governor then submit task for processing.
 
         @param task_spec: (TaskMessage)
+        @param available_processing_capacity: (shared multiprocessing.Manager Value)
         @return: None
         """
         if not isinstance(task_spec, TaskMessage):
@@ -70,3 +71,20 @@ class AbstractMycorrhiza(LoggingMixin):
             time.sleep(5.0 * collision_reduction)
 
         work_queue_submit.put(task_spec)
+
+    @classmethod
+    def wait_for_capacity(cls, work_queue_submit, available_processing_capacity):
+        """
+        Block until the governor has capacity to process a task.
+
+        Warning - potential race condition.
+
+        @param available_processing_capacity: (shared multiprocessing.Manager Value)
+        @return: None
+        """
+        # TODO - proper sync primitive in the governor
+        collision_reduction = random.random()
+        time.sleep(5.0 * collision_reduction)
+        while available_processing_capacity.value < 1 or not work_queue_submit.empty():
+            collision_reduction = random.random()
+            time.sleep(5.0 * collision_reduction)

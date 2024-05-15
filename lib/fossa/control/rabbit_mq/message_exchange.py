@@ -46,9 +46,26 @@ class RabbitMx(AbstractMycorrhiza):
                 self.log("Connected to RabbitMQ")
 
                 self.log("RabbitMx starting .. waiting for messages ...")
-                for method, properties, body in rabbit_mq.channel.consume(
-                    queue=rabbit_mq.task_queue_name
-                ):
+
+                # `basic_get` fetches a single message.
+                # Previously, `rabbit_mq.channel.consume` was used but would result in a blocking
+                # condition if tasks took too long to be accepted by `RabbitMx.submit_task`. This
+                # resulted in the `consume` method not being visited enough.
+                while True:
+                    # This is a race condition. For simplicity, the governor uses a queue. If a
+                    # concurrency primative like a semaphore was used a slot could be booked
+                    # here and only then fetch a message from RabbitMQ.
+                    RabbitMx.wait_for_capacity(work_queue_submit, available_processing_capacity)
+
+                    method, properties, body = rabbit_mq.channel.basic_get(
+                        queue=rabbit_mq.task_queue_name
+                    )
+
+                    if method is None and properties is None and body is None:
+                        self.log("No messages available from channel .. sleeping")
+                        time.sleep(5)
+                        continue
+
                     subtask_id = properties.correlation_id
                     msg = f"Exchange received subtask_id: {subtask_id} from {properties.reply_to}"
                     self.log(msg)
@@ -69,9 +86,7 @@ class RabbitMx(AbstractMycorrhiza):
                     rabbit_mq.channel.basic_ack(delivery_tag=method.delivery_tag)
 
                     # This message must wait until RabbitMx.submit_task has found capacity.
-                    # the alternative is to stop using rabbit_mq.channel.consume and check
-                    # available_processing_capacity before explicitly taking a message from
-                    # rabbitmq. But this is still a race condition so sticking with this pattern.
+                    # 'wait_for_capacity' above is still a potential race condition.
                     RabbitMx.submit_task(
                         task_spec, work_queue_submit, available_processing_capacity
                     )

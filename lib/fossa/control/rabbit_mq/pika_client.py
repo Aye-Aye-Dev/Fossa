@@ -4,10 +4,6 @@ import time
 import pika
 
 
-# def failure_to_publish_callback(channel, method, properties, body):
-#     print("X" * 2000, channel, method, properties, body)
-
-
 class BasicPikaClient:
     def __init__(self, url):
         """
@@ -15,6 +11,9 @@ class BasicPikaClient:
 
         for AWS-
         f"amqps://{rabbitmq_user}:{rabbitmq_password}@{rabbitmq_broker_id}.mq.{region}.amazonaws.com:5671"
+
+        Using a blocking connection with the broker. See-
+        https://pika.readthedocs.io/en/stable/modules/adapters/blocking.html
         """
         if url.startswith("amqp://"):
             self.parameters = pika.URLParameters(url)
