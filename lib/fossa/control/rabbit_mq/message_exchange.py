@@ -127,5 +127,3 @@ class RabbitMx(AbstractMycorrhiza):
             body=final_task_message,
         )
         self.log(f"reply complete for {subtask_id}")
-
-        rabbit_mq.close_connection()

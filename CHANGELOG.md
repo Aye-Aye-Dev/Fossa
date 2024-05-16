@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.27] - 2024-05-16
+### Changed
+- RabbitMx.callback_on_processing_complete to not close the channel as this appears to be shared within the process
+- BasicPikaClient.parameters.blocked_connection_timeout - if this is a problem there will be proper exceptions raised from here on.
+ 
 ## [0.0.26] - 2024-05-16
 ### Changed
 - explicit close to RabbitMq connections.

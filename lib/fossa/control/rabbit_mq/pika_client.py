@@ -29,6 +29,8 @@ class BasicPikaClient:
         else:
             raise ValueError("Rabbit MQ broker urls are expected to start with amqp:// or amqps://")
 
+        self.parameters.blocked_connection_timeout = 60
+
         # see :meth:`connect`
         self.connection = None
         self.channel = None
