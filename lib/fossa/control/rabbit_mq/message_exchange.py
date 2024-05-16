@@ -62,7 +62,7 @@ class RabbitMx(AbstractMycorrhiza):
                     )
 
                     if method is None and properties is None and body is None:
-                        self.log("No messages available from channel .. sleeping")
+                        self.log("No messages available from channel .. sleeping", level="DEBUG")
                         time.sleep(5)
                         continue
 
@@ -93,6 +93,13 @@ class RabbitMx(AbstractMycorrhiza):
 
             except Exception as e:
                 self.log(f"Restarting after exception in RabbitMQ exchange: {e}", "ERROR")
+
+                # maybe pika.exceptions.ConnectionWrongStateError ?
+                try:
+                    rabbit_mq.close_connection()
+                except:
+                    pass
+
                 time.sleep(5)
 
     def callback_on_processing_complete(self, final_task_message, task_spec):
@@ -120,3 +127,5 @@ class RabbitMx(AbstractMycorrhiza):
             body=final_task_message,
         )
         self.log(f"reply complete for {subtask_id}")
+
+        rabbit_mq.close_connection()

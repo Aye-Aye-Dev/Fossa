@@ -77,3 +77,13 @@ class BasicPikaClient:
             results_queue = self.channel.queue_declare(queue="", exclusive=True)
             self._call_back_queue = results_queue.method.queue
         return self._call_back_queue
+
+    def close_connection(self):
+        """
+        Disconnect from RabbitMQ. If there are any open channels, it will attempt to close them
+        prior to fully disconnecting. Channels which have active consumers will attempt to send a
+        Basic.Cancel to RabbitMQ to cleanly stop the delivery of messages prior to closing the
+        channel.
+        """
+        if self.channel:
+            self.channel.close()

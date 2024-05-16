@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.26] - 2024-05-16
+### Changed
+- explicit close to RabbitMq connections.
+
 ## [0.0.25] - 2024-05-15
 ### Fixed
 - blocking condition when a long running task on a node without available processing capacity. Instea
