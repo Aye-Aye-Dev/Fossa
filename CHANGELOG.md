@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.29] - 2024-05-18
+### Changed
+- internal timeout when waiting for capacity
+- RabbitMx.callback_on_processing_complete to use separate rabbit mq client
+
+### Fixed
+- with work around when task count can exceed node capacity
+
+### Added
+- better clean-up when task with RabbitMq connection is garbage collected
+
 ## [0.0.28] - 2024-05-17
 ### Changed
 - .submit_task to have a timeout. This allows RabbitMQ heartbeats to be processed. It was a problem when a node had no capacity and had long running tasks

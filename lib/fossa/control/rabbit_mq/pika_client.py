@@ -43,6 +43,9 @@ class BasicPikaClient:
         # single reply channel
         self._call_back_queue = None
 
+    def __del__(self):
+        self.close_connection()
+
     def connect(self):
         """
         Generator yielding False until a successful connection is made to RabbitMq
@@ -87,5 +90,8 @@ class BasicPikaClient:
         Basic.Cancel to RabbitMQ to cleanly stop the delivery of messages prior to closing the
         channel.
         """
-        if self.channel:
-            self.channel.close()
+        if self.connection:
+            self.connection.close()
+            self.channel = None
+            self.connection = None
+            self._queue_init_flag = False

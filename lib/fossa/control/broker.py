@@ -72,6 +72,10 @@ class AbstractMycorrhiza(LoggingMixin):
             return False
 
         work_queue_submit.put(task_spec)
+
+        # reduce chance of race condition that see node allocated beyond capacity
+        time.sleep(0.1)
+
         return True
 
     @classmethod

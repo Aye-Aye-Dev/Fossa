@@ -30,6 +30,7 @@ class RabbitMx(AbstractMycorrhiza):
         """
         self.broker_url = broker_url
         super().__init__(*args, **kwargs)
+        self.rabbit_mq = None
 
     def run_forever(self, work_queue_submit, available_processing_capacity):
         """
@@ -37,6 +38,12 @@ class RabbitMx(AbstractMycorrhiza):
 
         Runs in a separate Process
         """
+
+        # in order to maintain heartbeats with the broker :meth:`process_data_events` must
+        # be called more frequently than the heartbeat interval x2. This interval defaults
+        # to 30 seconds.
+        broker_timeout = 10
+        self.log("RabbitMx exchange is starting")
 
         while True:
             try:
@@ -51,11 +58,28 @@ class RabbitMx(AbstractMycorrhiza):
                 # Previously, `rabbit_mq.channel.consume` was used but would result in a blocking
                 # condition if tasks took too long to be accepted by `RabbitMx.submit_task`. This
                 # resulted in the `consume` method not being visited enough.
+                # last_events = time.time()
                 while True:
                     # This is a race condition. For simplicity, the governor uses a queue. If a
                     # concurrency primative like a semaphore was used a slot could be booked
                     # here and only then fetch a message from RabbitMQ.
-                    RabbitMx.wait_for_capacity(work_queue_submit, available_processing_capacity)
+                    timed_out = RabbitMx.wait_for_capacity(
+                        work_queue_submit,
+                        available_processing_capacity,
+                        timeout=broker_timeout,
+                    )
+
+                    # time_now = time.time()
+                    # elapsed = time_now - last_events
+                    # last_events = time_now
+                    # self.log(f"Last message exchange events {elapsed} seconds", level="DEBUG")
+
+                    # heartbeats when using a blocking connection need to be explicitly handled
+                    rabbit_mq.connection.process_data_events()
+
+                    if timed_out:
+                        self.log("Waiting on processing capacity", level="DEBUG")
+                        continue
 
                     method, properties, body = rabbit_mq.channel.basic_get(
                         queue=rabbit_mq.task_queue_name
@@ -86,10 +110,20 @@ class RabbitMx(AbstractMycorrhiza):
                     rabbit_mq.channel.basic_ack(delivery_tag=method.delivery_tag)
 
                     # This message must wait until RabbitMx.submit_task has found capacity.
-                    # 'wait_for_capacity' above is still a potential race condition.
-                    RabbitMx.submit_task(
-                        task_spec, work_queue_submit, available_processing_capacity
-                    )
+                    # 'wait_for_capacity' above is to stop messages being taken from RabbitMq
+                    # but still leaves the following potential race condition.
+                    while not RabbitMx.submit_task(
+                        task_spec,
+                        work_queue_submit,
+                        available_processing_capacity,
+                        timeout=broker_timeout,
+                    ):
+                        # Block on race condition encountered. A message will be in limbo. i.e.
+                        # not in RabbitMq or in the governor's queue.
+                        self.log(f"Waiting on processing capacity for subtask_id: {subtask_id}")
+                        # heartbeats when using a blocking connection need to be explicitly handled
+                        rabbit_mq.connection.process_data_events()
+                        # last_events = time.time()
 
             except Exception as e:
                 self.log(f"Restarting after exception in RabbitMQ exchange: {e}", "ERROR")
@@ -109,8 +143,13 @@ class RabbitMx(AbstractMycorrhiza):
         Send these results to the originating task.
         """
 
-        rabbit_mq = BasicPikaClient(url=self.broker_url)
-        for _not_connected in rabbit_mq.connect():
+        if self.rabbit_mq is None:
+            self.log("Init RabbitMQ for callbacks")
+            self.rabbit_mq = BasicPikaClient(url=self.broker_url)
+        else:
+            self.log("No Init RabbitMQ for callbacks")
+
+        for _not_connected in self.rabbit_mq.connect():
             self.log("Waiting to connect to RabbitMQ....", "WARNING")
         self.log("Connected to RabbitMQ")
 
@@ -120,10 +159,11 @@ class RabbitMx(AbstractMycorrhiza):
         msg = f"Processing of subtask_id:{subtask_id} is complete, sending result to {reply_to}"
         self.log(msg)
 
-        rabbit_mq.channel.basic_publish(
+        self.rabbit_mq.channel.basic_publish(
             exchange="",
             routing_key=reply_to,
             properties=pika.BasicProperties(correlation_id=subtask_id),
             body=final_task_message,
         )
         self.log(f"reply complete for {subtask_id}")
+        self.rabbit_mq.connection.process_data_events()
