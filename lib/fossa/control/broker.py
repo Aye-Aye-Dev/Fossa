@@ -48,13 +48,15 @@ class AbstractMycorrhiza(LoggingMixin):
         raise NotImplementedError("Must be implemented by subclasses")
 
     @classmethod
-    def submit_task(cls, task_spec, work_queue_submit, available_processing_capacity):
+    def submit_task(cls, task_spec, work_queue_submit, available_processing_capacity, timeout):
         """
         Wait for processing capacity in the governor then submit task for processing.
 
         @param task_spec: (TaskMessage)
         @param available_processing_capacity: (shared multiprocessing.Manager Value)
-        @return: None
+        @param timeout: float - max time before returning, will return after this but not exactly this.
+        @return: bool - task was successfully passed to the governor's queue. Users of this method
+                should re-try on False.
         """
         if not isinstance(task_spec, TaskMessage):
             raise ValueError("task_spec must be of type TaskMessage")
@@ -64,27 +66,32 @@ class AbstractMycorrhiza(LoggingMixin):
         # the empty check is enough for now to reduce the chance of running more
         # tasks then `available_processing_capacity`.
 
-        collision_reduction = random.random()
-        time.sleep(5.0 * collision_reduction)
-        while available_processing_capacity.value < 1 or not work_queue_submit.empty():
-            collision_reduction = random.random()
-            time.sleep(5.0 * collision_reduction)
+        timed_out = cls.wait_for_capacity(work_queue_submit, available_processing_capacity, timeout)
+        if timed_out:
+            # task not submitted
+            return False
 
         work_queue_submit.put(task_spec)
+        return True
 
     @classmethod
-    def wait_for_capacity(cls, work_queue_submit, available_processing_capacity):
+    def wait_for_capacity(cls, work_queue_submit, available_processing_capacity, timeout):
         """
         Block until the governor has capacity to process a task.
 
         Warning - potential race condition.
 
         @param available_processing_capacity: (shared multiprocessing.Manager Value)
-        @return: None
+        @param timeout: float - max time before returning, will return after this but not exactly this.
+        @return: bool if timed out
         """
         # TODO - proper sync primitive in the governor
-        collision_reduction = random.random()
-        time.sleep(5.0 * collision_reduction)
+        start_time = time.time()
         while available_processing_capacity.value < 1 or not work_queue_submit.empty():
             collision_reduction = random.random()
-            time.sleep(5.0 * collision_reduction)
+            time.sleep(3.0 * collision_reduction)
+
+            if (time.time() - start_time) > timeout:
+                return True
+
+        return False

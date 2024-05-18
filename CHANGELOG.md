@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.28] - 2024-05-17
+### Changed
+- .submit_task to have a timeout. This allows RabbitMQ heartbeats to be processed. It was a problem when a node had no capacity and had long running tasks
+
+### Fixed
+- a couple of unnecessary sleeps when tasks move between RabbitMq and the governor
+- task complete callback wasn't closing the rabbitmq connection
+- blocking connections should explicitly call rabbit_mq.connection.process_data_events
+
 ## [0.0.27] - 2024-05-16
 ### Changed
 - RabbitMx.callback_on_processing_complete to not close the channel as this appears to be shared within the process

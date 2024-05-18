@@ -70,6 +70,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         last_logged = 0
 
         # Listen for subtasks completing
+        last_events = time.time()
         self.log(f"Connected to RabbitMQ, now waiting on {self.rabbit_mq.reply_queue} ....")
         for method, properties, body in self.rabbit_mq.channel.consume(
             queue=self.rabbit_mq.reply_queue,
@@ -78,6 +79,13 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             if len(self.tasks_in_flight) == 0:
                 self.log("All tasks complete")
                 return
+
+            # heartbeats when using a blocking connection need to be explicitly handled
+            time_now = time.time()
+            elapsed = time_now - last_events
+            last_events = time_now
+            self.log(f"Last process pool events {elapsed} seconds")
+            self.rabbit_mq.connection.process_data_events()
 
             if method is None and properties is None and body is None:
                 # on inactivity_timeout

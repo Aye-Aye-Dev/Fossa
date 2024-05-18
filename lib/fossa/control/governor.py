@@ -43,7 +43,7 @@ class Governor(LoggingMixin):
         # Tasks submitted and internal tasks (e.g. process results at end of task) are put on this
         # queue.
         self._task_queue_submit = multiprocessing.Queue()
-        self._task_queue_receive = multiprocessing.Queue()
+        # self._task_queue_receive = multiprocessing.Queue()
 
         # Each instance of Fossa must have a single governor. Some usages (for example
         # using Flask's debug=True and a code re-loader) will cause __main__ and therefore
@@ -309,6 +309,8 @@ class Governor(LoggingMixin):
                 task_spec.on_completion_callback(final_task_message, task_spec)
 
                 # Remove from processing table but keep a log of finished tasks
+                # Not pickle-able
+                process_details["task_spec"].on_completion_callback = None
                 previous_tasks.append(process_details)
                 del process_table[task_id]
 
