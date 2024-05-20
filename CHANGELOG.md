@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.30] - 2024-05-20
+### Changed
+- tidied log messages, reduced repeating log messages at controller level
+
 ## [0.0.29] - 2024-05-18
 ### Changed
 - internal timeout when waiting for capacity

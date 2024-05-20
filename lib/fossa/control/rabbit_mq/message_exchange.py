@@ -43,8 +43,9 @@ class RabbitMx(AbstractMycorrhiza):
         # be called more frequently than the heartbeat interval x2. This interval defaults
         # to 30 seconds.
         broker_timeout = 10
-        self.log("RabbitMx exchange is starting")
 
+        log_throttle = set()
+        self.log("RabbitMx exchange is starting")
         while True:
             try:
                 rabbit_mq = BasicPikaClient(url=self.broker_url)
@@ -78,17 +79,31 @@ class RabbitMx(AbstractMycorrhiza):
                     rabbit_mq.connection.process_data_events()
 
                     if timed_out:
-                        self.log("Waiting on processing capacity", level="DEBUG")
+                        if "processing_capacity" not in log_throttle:
+                            self.log("Waiting on processing capacity", level="DEBUG")
+                            log_throttle.add("processing_capacity")
                         continue
+                    else:
+                        self.log("Processing capacity found", level="DEBUG")
+                        if "processing_capacity" in log_throttle:
+                            log_throttle.remove("processing_capacity")
 
                     method, properties, body = rabbit_mq.channel.basic_get(
                         queue=rabbit_mq.task_queue_name
                     )
 
                     if method is None and properties is None and body is None:
-                        self.log("No messages available from channel .. sleeping", level="DEBUG")
+                        if "channel_empty" not in log_throttle:
+                            self.log(
+                                "No messages available from channel .. sleeping", level="DEBUG"
+                            )
+                            log_throttle.add("channel_empty")
                         time.sleep(5)
                         continue
+                    else:
+                        self.log("Messages available on channel again", level="DEBUG")
+                        if "channel_empty" in log_throttle:
+                            log_throttle.remove("channel_empty")
 
                     subtask_id = properties.correlation_id
                     msg = f"Exchange received subtask_id: {subtask_id} from {properties.reply_to}"
@@ -124,6 +139,8 @@ class RabbitMx(AbstractMycorrhiza):
                         # heartbeats when using a blocking connection need to be explicitly handled
                         rabbit_mq.connection.process_data_events()
                         # last_events = time.time()
+
+                    self.log(f"Submitted subtask_id: {subtask_id} to the work queue")
 
             except Exception as e:
                 self.log(f"Restarting after exception in RabbitMQ exchange: {e}", "ERROR")
