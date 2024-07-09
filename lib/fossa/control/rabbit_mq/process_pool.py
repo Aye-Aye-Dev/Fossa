@@ -39,7 +39,9 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
         @see doc. string in :meth:`AbstractProcessPool.run_subtasks`
         """
-        # fortunately sub_tasks is a list (not a generator) so all tasks can be sent
+        max_in_flight = processes if processes is not None else len(sub_tasks)
+
+        pending_tasks = []
         for subtask_number, sub_task in enumerate(sub_tasks):
             # sub_task is a :class:`TaskPartition` object
             # See Aye-aye's `ayeaye.runtime.task_message.TaskPartition`
@@ -52,15 +54,31 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 "model_construction_kwargs": sub_task.model_construction_kwargs,
                 "partition_initialise_kwargs": sub_task.partition_initialise_kwargs,
             }
-            task_definition_json = json.dumps(task_definition)
+            pending_tasks.append((subtask_id, task_definition))
 
-            self.tasks_in_flight[subtask_id] = task_definition
-            self.tasks_in_flight[subtask_id]["start_time"] = datetime.utcnow()
+        def send_pending_subtasks():
+            """
+            If there is processing capacity, send out sub-tasks.
+            @return: int - number of pending sub-tasks awaiting send out to workers
+            """
+            while len(self.tasks_in_flight) < max_in_flight:
+                if len(pending_tasks) == 0:
+                    return 0
 
-            # This JSON encoded payload will be received in :meth:`RabbitMx.run_forever` where
-            # all of it will be used alongside some additional args to build :class:`TaskMessage`
-            # TODO - Better typing should be used
-            self.send_task(subtask_id=subtask_id, task_payload=task_definition_json)
+                subtask_id, task_definition = pending_tasks.pop(0)
+                task_definition_json = json.dumps(task_definition)
+                self.tasks_in_flight[subtask_id] = task_definition
+                self.tasks_in_flight[subtask_id]["start_time"] = datetime.utcnow()
+
+                # This JSON encoded payload will be received in :meth:`RabbitMx.run_forever` where
+                # all of it will be used alongside some additional args to build :class:`TaskMessage`
+                # TODO - Better typing should be used
+                self.send_task(subtask_id=subtask_id, task_payload=task_definition_json)
+
+            return len(pending_tasks)
+
+        # send inital batch of sub-tasks
+        pending_tasks_count = send_pending_subtasks()
 
         for _not_connected in self.rabbit_mq.connect():
             self.log("Waiting to connect to RabbitMQ....", "WARNING")
@@ -70,7 +88,6 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         last_logged = 0
 
         # Listen for subtasks completing
-        last_events = time.time()
         self.log(f"Connected to RabbitMQ, now waiting on {self.rabbit_mq.reply_queue} ....")
         for method, properties, body in self.rabbit_mq.channel.consume(
             queue=self.rabbit_mq.reply_queue,
@@ -81,17 +98,17 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 return
 
             # heartbeats when using a blocking connection need to be explicitly handled
-            time_now = time.time()
-            elapsed = time_now - last_events
-            last_events = time_now
-            self.log(f"Last process pool events {elapsed} seconds")
             self.rabbit_mq.connection.process_data_events()
 
             if method is None and properties is None and body is None:
                 # on inactivity_timeout
                 if last_logged < time.time() - max_log_seconds:
                     in_flight_count = len(self.tasks_in_flight)
-                    self.log(f"Waiting on {in_flight_count} tasks to complete...")
+                    msg = (
+                        f"Waiting on {in_flight_count} tasks to complete and "
+                        f"{pending_tasks_count} awaiting send to workers"
+                    )
+                    self.log(msg)
 
                     task_ids = ",".join([t for t in self.tasks_in_flight.keys()])
                     max_output = 1024
@@ -154,6 +171,8 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 msg_type = str(type(task_message))
                 msg = f"Unknown message type {msg_type} received with subtask_id: {subtask_id} : {body}"
                 self.log(msg, "ERROR")
+
+            pending_tasks_count = send_pending_subtasks()
 
     def send_task(self, subtask_id, task_payload):
         """

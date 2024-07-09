@@ -83,10 +83,9 @@ class RabbitMx(AbstractMycorrhiza):
                             self.log("Waiting on processing capacity", level="DEBUG")
                             log_throttle.add("processing_capacity")
                         continue
-                    else:
+                    elif "processing_capacity" in log_throttle:
+                        log_throttle.remove("processing_capacity")
                         self.log("Processing capacity found", level="DEBUG")
-                        if "processing_capacity" in log_throttle:
-                            log_throttle.remove("processing_capacity")
 
                     method, properties, body = rabbit_mq.channel.basic_get(
                         queue=rabbit_mq.task_queue_name
@@ -100,10 +99,9 @@ class RabbitMx(AbstractMycorrhiza):
                             log_throttle.add("channel_empty")
                         time.sleep(5)
                         continue
-                    else:
+                    elif "channel_empty" in log_throttle:
+                        log_throttle.remove("channel_empty")
                         self.log("Messages available on channel again", level="DEBUG")
-                        if "channel_empty" in log_throttle:
-                            log_throttle.remove("channel_empty")
 
                     subtask_id = properties.correlation_id
                     msg = f"Exchange received subtask_id: {subtask_id} from {properties.reply_to}"

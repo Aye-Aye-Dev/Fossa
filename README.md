@@ -123,4 +123,4 @@ curl --header "Content-Type: application/json" \
 
 ### Tests
 
-The normal unittests will run with the `python -m unittest discover tests` command detailed above. There are also some integration tests in an early stage of development. They are message and output a lot of rubbish to the console. Enable them by supplying a RabbitMQ broker through an environmental variable. e.g. `export RABBITMQ_URL=amqp://guest:guest@localhost`.
+The normal unittests will run with the `python -m unittest discover tests` command detailed above. There are also some integration tests in an early stage of development. They are messy and output a lot of rubbish to the console. Enable them by supplying a RabbitMQ broker through an environmental variable. e.g. `export RABBITMQ_URL=amqp://guest:guest@localhost`.

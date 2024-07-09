@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import requests
@@ -6,6 +7,7 @@ import tempfile
 import time
 import unittest
 
+from examples.example_etl import StaggeredEtl
 from tests.integration_tests.environments import OneNodeLocalEnvironment
 
 # The integration tests need external resources. For now, a RabbitMq server is used but not created
@@ -205,7 +207,7 @@ class TestFossaBasics(unittest.TestCase):
             else:
                 raise ValueError(f"Unexpected status code: {r.status_code}")
 
-        print(f"accepted: {tasks_added}  rejected: {tasks_rejected}")
+        # print(f"accepted: {tasks_added}  rejected: {tasks_rejected}")
         self.assertGreater(tasks_added, 0, "Zero tasks accepted")
 
         r = requests.get(self.fossa_api_url + "node_info")
@@ -232,7 +234,7 @@ class TestFossaBasics(unittest.TestCase):
         while True:
             node_info = requests.get(self.fossa_api_url + "node_info").json()
             concurrent_tasks = len(node_info["running_tasks"])
-            print(concurrent_tasks)
+            # print(concurrent_tasks)
 
             if concurrent_tasks == 0:
                 # all tasks complete
@@ -246,3 +248,89 @@ class TestFossaBasics(unittest.TestCase):
             f"{concurrent_allowed}"
         )
         self.assertGreaterEqual(concurrent_allowed + tolerance, max_concurrent_tasks, msg)
+
+    def test_rate_limiting(self):
+        """
+        Rough check of rate limiting.
+
+        Run a fixed number of sub-tasks that sleep with 2 and then 12 workers.
+
+        Total processing time for the tasks will be similar but total running time will be much
+        slower for 2 workers.
+        """
+
+        working_space = self.working_directory()
+
+        results = {}
+        worker_allocations = [2, 12]
+        for worker_count in worker_allocations:
+            fossa_command = {
+                "model_class": "StaggeredEtl",
+                "resolver_context": {
+                    "output_datasets": working_space,
+                    "requested_workers": str(worker_count),
+                },
+            }
+            r = requests.post(
+                self.fossa_api_url + "task",
+                data=json.dumps(fossa_command),
+                headers=self.api_headers,
+            )
+
+            self.assertEqual(200, r.status_code)
+
+            task_submit_doc = r.json()
+            task_url = task_submit_doc["_metadata"]["links"]["task"]
+            self.assertTrue(task_url.startswith(self.fossa_api_url))
+
+            task_doc = self.wait_for_task_status(task_url, "complete")
+            self.assertIn("finished", task_doc)
+
+            output_file = os.path.join(working_space, "staggered_results.csv")
+            first = None
+            last = None
+            processing_time = 0.0
+            with open(output_file, encoding="utf-8-sig") as f:
+                r = csv.DictReader(f)
+                for x in r:
+                    start = float(x["started"])
+                    finish = float(x["finished"])
+
+                    if first is None:
+                        first = start
+
+                    last = finish
+                    processing_time += finish - start
+
+            running_time = last - first
+            results[worker_count] = dict(
+                first=first,
+                last=last,
+                running_time=running_time,
+                processing_time=processing_time,
+            )
+
+        # The time taken by fossa to distribute tasks and return results isn't fixed so the following
+        # checks could be flaky.
+        # seconds
+        minimum_possible_processing_time = StaggeredEtl.sub_tasks_count * StaggeredEtl.sleep_time
+        expected_upper_bound_process_time = minimum_possible_processing_time + 1
+
+        for worker_count, result in results.items():
+            msg = f"For worker_count:{worker_count}, processing time was higher than expected"
+            self.assertLessEqual(result["processing_time"], expected_upper_bound_process_time, msg)
+
+        msg = (
+            "12 vs. 2 workers should be 6 times faster but because of how message passing works"
+            " the gain should actually be higher."
+        )
+        wa_12 = worker_allocations[1]  # i.e. == 12
+        wa_2 = worker_allocations[0]  # == 2
+        expected_minimum_speed_gain = wa_12 / wa_2
+        actual_speed_gain = results[wa_2]["running_time"] / results[wa_12]["running_time"]
+
+        self.assertGreaterEqual(actual_speed_gain, expected_minimum_speed_gain, msg)
+
+        msg = "The processing time should be similar for both"
+        delta = abs(results[wa_12]["processing_time"] - results[wa_2]["processing_time"])
+        self.assertLessEqual(delta, 1, msg)

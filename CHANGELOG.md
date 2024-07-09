@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.31] - 2024-07-09
+### Changed
+- DEBUG log messages around channel conditions to reduce how often they are logged
+- best efforts to cleanly shutdown connection to RabbitMQ as this was producing a disturning log message.
+- RabbitMqProcessPool to honour number of processes passed. This can be used to rate limit the number of running sub-tasks by using .partition_plea(..)
+
 ## [0.0.30] - 2024-05-20
 ### Changed
 - tidied log messages, reduced repeating log messages at controller level

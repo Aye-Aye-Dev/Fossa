@@ -44,7 +44,11 @@ class BasicPikaClient:
         self._call_back_queue = None
 
     def __del__(self):
-        self.close_connection()
+        try:
+            self.close_connection()
+        except:
+            # it's best efforts to shutdown cleanly. Network might have already gone away.
+            pass
 
     def connect(self):
         """

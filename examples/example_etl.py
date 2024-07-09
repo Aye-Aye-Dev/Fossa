@@ -124,3 +124,44 @@ class PartitionedExampleEtl(ayeaye.PartitionedModel):
             if md5[0:count] == str(ch) * count:
                 return (ch, len(s))
             s += ch
+
+
+class StaggeredEtl(ayeaye.PartitionedModel):
+    """
+    Rate limit sub-tasks run in parallel.
+    """
+
+    sub_tasks_count = 12
+
+    # needs to be significantly different to time taken for message passing + fossa
+    sleep_time = 0.4
+
+    sub_task_stats = ayeaye.Connect(
+        engine_url="csv://{output_datasets}/staggered_results.csv",
+        field_names=["started", "finished"],
+        access=ayeaye.AccessMode.WRITE,
+    )
+
+    def build(self):
+        pass
+
+    def partition_plea(self):
+        # runtime decision on number of workers comes from the integration test
+        requested_workers = int(ayeaye.connector_resolver.resolve("{requested_workers}"))
+        return ayeaye.PartitionedModel.PartitionOption(
+            minimum=requested_workers,
+            maximum=requested_workers,
+            optimal=requested_workers,
+        )
+
+    def partition_slice(self, partition_count):
+        subtasks = [("some_work", {}) for _task_id in range(self.sub_tasks_count)]
+        return subtasks
+
+    def partition_subtask_complete(self, subtask_method_name, subtask_kwargs, subtask_return_value):
+        self.sub_task_stats.add({"started": subtask_return_value, "finished": time.time()})
+
+    def some_work(self):
+        start_time = time.time()
+        time.sleep(self.sleep_time)
+        return start_time

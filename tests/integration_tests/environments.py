@@ -11,6 +11,7 @@ from examples.example_etl import (
     PartialFailure,
     PartitionedExampleEtl,
     SecondTimeLucky,
+    StaggeredEtl,
 )
 from fossa import run_fossa
 from fossa.control.rabbit_mq.message_exchange import RabbitMx
@@ -55,6 +56,7 @@ class OneNodeLocalEnvironment(FossaIntTest):
                 PartitionedExampleEtl,
                 SecondTimeLucky,
                 HalfSecondEtl,
+                StaggeredEtl,
             ],
             ISOLATED_PROCESSOR=RabbitMqProcessor(broker_url=self.rabbmitmq_broker_url),
             MESSAGE_BROKER_MANAGERS=[RabbitMx(broker_url=self.rabbmitmq_broker_url)],
