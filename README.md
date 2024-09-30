@@ -100,7 +100,7 @@ In a production environment tasks are more likely to arrive through a message qu
 
 If you used the `local_config_example.py` file as a starting point for your local config it will have a single model already in the `ACCEPTED_MODEL_CLASSES` parameter. This is a tiny example ETL model.
 
-Fossa will only run models that have been pre-defined before start-up. A simple way to supply these models is through the config file but there are other ways too.
+Fossa will only run models that have been pre-defined before start-up. The `ACCEPTED_MODEL_CLASSES` config variable is the simplest way to set this.
 
 POST to your local instance of Fossa a task specification. This example runs the complete `SimpleExampleEtl` model-
 

@@ -142,8 +142,8 @@ class AbstractIsolatedProcessor(LoggingMixin):
 
         except Exception as e:
             # TODO - recording the traceback is a bit rough
-            _e_type, _e_value, e_traceback = sys.exc_info()
-            traceback_ln = []
+            _e_type, e_value, e_traceback = sys.exc_info()
+            traceback_ln = [str(e_value)]
             tb_list = traceback.extract_tb(e_traceback)
             for filename, line, funcname, text in tb_list:
                 traceback_ln.append(f"Traceback:  File[{filename}] Line[{line}] Text[{text}]")

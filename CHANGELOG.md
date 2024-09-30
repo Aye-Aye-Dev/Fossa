@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.32] - 2024-09-30
+### Changed
+- AbstractIsolatedProcessor to include an additional traceback value
+- RabbitMqProcessPool to use the new sub_task.additional_context from ayeaye
+
 ## [0.0.31] - 2024-07-09
 ### Changed
 - DEBUG log messages around channel conditions to reduce how often they are logged

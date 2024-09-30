@@ -40,17 +40,21 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         @see doc. string in :meth:`AbstractProcessPool.run_subtasks`
         """
         max_in_flight = processes if processes is not None else len(sub_tasks)
+        if context_kwargs is None:
+            context_kwargs = {}
 
         pending_tasks = []
         for subtask_number, sub_task in enumerate(sub_tasks):
             # sub_task is a :class:`TaskPartition` object
             # See Aye-aye's `ayeaye.runtime.task_message.TaskPartition`
             subtask_id = f"{self.pool_id}:{subtask_number}"
+            augmented_context = {**context_kwargs, **sub_task.additional_context}
+
             task_definition = {
                 "model_class": sub_task.model_cls.__name__,
                 "method": sub_task.method_name,
                 "method_kwargs": sub_task.method_kwargs,
-                "resolver_context": context_kwargs,
+                "resolver_context": augmented_context,
                 "model_construction_kwargs": sub_task.model_construction_kwargs,
                 "partition_initialise_kwargs": sub_task.partition_initialise_kwargs,
             }

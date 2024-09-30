@@ -355,11 +355,10 @@ class Governor(LoggingMixin):
         are scenarios when this method will return None (i.e. no available capacity) when there
         is capacity and vice versa.
 
-
         The 'blocking=False' argument will reduce the chance of a race condition whilst also
         returning within a reasonable time (currently 1000 msec).
 
-        @param task_spec: (TaskMessage)
+        @param task_spec: (:class:`fossa.control.message.TaskMessage`)
         @param blocking: (boolean) - when True, wait for capacity. When False, return None
                 if the task couldn't be accepted because the governor is at full processing
                 capacity.
