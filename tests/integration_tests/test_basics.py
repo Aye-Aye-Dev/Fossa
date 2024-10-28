@@ -334,3 +334,10 @@ class TestFossaBasics(unittest.TestCase):
         msg = "The processing time should be similar for both"
         delta = abs(results[wa_12]["processing_time"] - results[wa_2]["processing_time"])
         self.assertLessEqual(delta, 1, msg)
+
+    def test_subtask_kwarg_datetime(self):
+        """
+        subtask args are serialised to JSON, datetimes don't serialise, need custom JSON encoding
+        and decoding class.
+        """
+        pass

@@ -97,8 +97,8 @@ class PartitionedExampleEtl(ayeaye.PartitionedModel):
         ]
         return subtasks
 
-    def partition_subtask_complete(self, subtask_method_name, subtask_kwargs, subtask_return_value):
-        msg = f"Subtask results are: {subtask_kwargs}, {subtask_return_value}"
+    def partition_subtask_complete(self, task_message):
+        msg = f"Subtask results are: {task_message.method_kwargs}, {task_message.return_value}"
         self.log(msg)
 
     def crypto_challenge(self, ch, count):
@@ -158,8 +158,8 @@ class StaggeredEtl(ayeaye.PartitionedModel):
         subtasks = [("some_work", {}) for _task_id in range(self.sub_tasks_count)]
         return subtasks
 
-    def partition_subtask_complete(self, subtask_method_name, subtask_kwargs, subtask_return_value):
-        self.sub_task_stats.add({"started": subtask_return_value, "finished": time.time()})
+    def partition_subtask_complete(self, task_message):
+        self.sub_task_stats.add({"started": task_message.return_value, "finished": time.time()})
 
     def some_work(self):
         start_time = time.time()

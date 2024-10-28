@@ -32,6 +32,10 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         # TODO retry if a task takes x percent longer than the slowest known task
         self.inactivity_timeout = 3.0
 
+        # default maximum - this rate limits sending tasks to RabbitMq by allowing this
+        # number of tasks to be queued for each task that creates sub-tasks
+        self.default_max_in_flight = 1024
+
     def run_subtasks(self, sub_tasks, context_kwargs=None, processes=None):
         """
         Generator yielding instances that are a subclass of :class:`AbstractTaskMessage`. These
@@ -39,37 +43,38 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
         @see doc. string in :meth:`AbstractProcessPool.run_subtasks`
         """
-        max_in_flight = processes if processes is not None else len(sub_tasks)
+        max_in_flight = processes if processes is not None else self.default_max_in_flight
         if context_kwargs is None:
             context_kwargs = {}
 
-        pending_tasks = []
-        for subtask_number, sub_task in enumerate(sub_tasks):
-            # sub_task is a :class:`TaskPartition` object
-            # See Aye-aye's `ayeaye.runtime.task_message.TaskPartition`
-            subtask_id = f"{self.pool_id}:{subtask_number}"
-            augmented_context = {**context_kwargs, **sub_task.additional_context}
-
-            task_definition = {
-                "model_class": sub_task.model_cls.__name__,
-                "method": sub_task.method_name,
-                "method_kwargs": sub_task.method_kwargs,
-                "resolver_context": augmented_context,
-                "model_construction_kwargs": sub_task.model_construction_kwargs,
-                "partition_initialise_kwargs": sub_task.partition_initialise_kwargs,
-            }
-            pending_tasks.append((subtask_id, task_definition))
+        subtask_number = 0
 
         def send_pending_subtasks():
             """
             If there is processing capacity, send out sub-tasks.
-            @return: int - number of pending sub-tasks awaiting send out to workers
+            @return: boolean - There are subtasks that haven't been sent out to workers.
+            i.e. the `sub_tasks` iterator hassn't been exhausted.
             """
             while len(self.tasks_in_flight) < max_in_flight:
-                if len(pending_tasks) == 0:
-                    return 0
+                try:
+                    sub_task = next(sub_tasks)
+                except StopIteration:
+                    # no more sub-tasks to send
+                    return False
 
-                subtask_id, task_definition = pending_tasks.pop(0)
+                subtask_id = f"{self.pool_id}:{subtask_number}"
+                subtask_number += 1
+                augmented_context = {**context_kwargs, **sub_task.additional_context}
+
+                task_definition = {
+                    "model_class": sub_task.model_cls.__name__,
+                    "method": sub_task.method_name,
+                    "method_kwargs": sub_task.method_kwargs,
+                    "resolver_context": augmented_context,
+                    "model_construction_kwargs": sub_task.model_construction_kwargs,
+                    "partition_initialise_kwargs": sub_task.partition_initialise_kwargs,
+                }
+
                 task_definition_json = json.dumps(task_definition)
                 self.tasks_in_flight[subtask_id] = task_definition
                 self.tasks_in_flight[subtask_id]["start_time"] = datetime.utcnow()
@@ -79,10 +84,11 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 # TODO - Better typing should be used
                 self.send_task(subtask_id=subtask_id, task_payload=task_definition_json)
 
-            return len(pending_tasks)
+            # There are still tasks in the sub_tasks iterator
+            return True
 
-        # send inital batch of sub-tasks
-        pending_tasks_count = send_pending_subtasks()
+        # send initial batch of sub-tasks
+        pending_tasks = send_pending_subtasks()
 
         for _not_connected in self.rabbit_mq.connect():
             self.log("Waiting to connect to RabbitMQ....", "WARNING")
@@ -108,10 +114,12 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 # on inactivity_timeout
                 if last_logged < time.time() - max_log_seconds:
                     in_flight_count = len(self.tasks_in_flight)
-                    msg = (
-                        f"Waiting on {in_flight_count} tasks to complete and "
-                        f"{pending_tasks_count} awaiting send to workers"
-                    )
+                    msg = f"Waiting on {in_flight_count} tasks to complete. "
+                    if pending_tasks:
+                        msg += "There are still tasks to send."
+                    else:
+                        msg += "All sub-tasks have been sent."
+
                     self.log(msg)
 
                     task_ids = ",".join([t for t in self.tasks_in_flight.keys()])
@@ -176,7 +184,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 msg = f"Unknown message type {msg_type} received with subtask_id: {subtask_id} : {body}"
                 self.log(msg, "ERROR")
 
-            pending_tasks_count = send_pending_subtasks()
+            pending_tasks = send_pending_subtasks()
 
     def send_task(self, subtask_id, task_payload):
         """
