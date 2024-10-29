@@ -100,6 +100,7 @@ class AbstractIsolatedProcessor(LoggingMixin):
                 subtask_return_value = sub_task_method(**method_kwargs)
 
             task_complete = TaskComplete(
+                model_cls_name=model_cls.__name__,
                 method_name=method,
                 method_kwargs=method_kwargs,
                 return_value=subtask_return_value,
