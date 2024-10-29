@@ -36,6 +36,8 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         # number of tasks to be queued for each task that creates sub-tasks
         self.default_max_in_flight = 1024
 
+        self.subtask_number = None
+
     def run_subtasks(self, sub_tasks, context_kwargs=None, processes=None):
         """
         Generator yielding instances that are a subclass of :class:`AbstractTaskMessage`. These
@@ -47,7 +49,7 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
         if context_kwargs is None:
             context_kwargs = {}
 
-        subtask_number = 0
+        self.subtask_number = 0
 
         def send_pending_subtasks():
             """
@@ -62,8 +64,8 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                     # no more sub-tasks to send
                     return False
 
-                subtask_id = f"{self.pool_id}:{subtask_number}"
-                subtask_number += 1
+                subtask_id = f"{self.pool_id}:{self.subtask_number}"
+                self.subtask_number += 1
                 augmented_context = {**context_kwargs, **sub_task.additional_context}
 
                 task_definition = {

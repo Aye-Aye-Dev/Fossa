@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.35] - 2024-10-29
+### Fixed
+- variable scope for critical counter in RabbitMq process_pool
+
 ## [0.0.34] - 2024-10-29
 ### Changed
 - to fit upstream change to Aye-aye - TaskComplete message structure
