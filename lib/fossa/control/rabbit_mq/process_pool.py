@@ -1,8 +1,11 @@
 import copy
 from datetime import datetime
 import json
+from multiprocessing import Queue
+import queue
 import random
 import string
+from threading import Thread
 import time
 
 from ayeaye.runtime.multiprocess import AbstractProcessPool
@@ -51,6 +54,21 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
 
         self.subtask_number = 0
 
+        subtasks_queue = Queue()
+
+        class SubTaskProcessor(Thread):
+            """`sub_tasks` is an iterator, it blocks. Thread because of sharing variables.
+            This just copies from the iterator to a queue which can be read in non-blocking
+            mode. Oh async, where art thou?
+            """
+
+            def run(self):
+                for sub_task in sub_tasks:
+                    subtasks_queue.put(sub_task)
+
+        sub_tasks_thread = SubTaskProcessor()
+        sub_tasks_thread.start()
+
         def send_pending_subtasks():
             """
             If there is processing capacity, send out sub-tasks.
@@ -58,11 +76,15 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             i.e. the `sub_tasks` iterator hassn't been exhausted.
             """
             while len(self.tasks_in_flight) < max_in_flight:
-                try:
-                    sub_task = next(sub_tasks)
-                except StopIteration:
-                    # no more sub-tasks to send
+                if not sub_tasks_thread.is_alive():
+                    # the iterator in the thread has been exhausted so no more tasks coming
                     return False
+
+                try:
+                    sub_task = subtasks_queue.get(block=False, timeout=1)
+                except queue.Empty:
+                    # There are probably more tasks to come
+                    return True
 
                 subtask_id = f"{self.pool_id}:{self.subtask_number}"
                 self.subtask_number += 1
@@ -105,7 +127,9 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             queue=self.rabbit_mq.reply_queue,
             inactivity_timeout=self.inactivity_timeout,
         ):
-            if len(self.tasks_in_flight) == 0:
+            pending_tasks = send_pending_subtasks()
+
+            if not pending_tasks and len(self.tasks_in_flight) == 0:
                 self.log("All tasks complete")
                 return
 
@@ -185,8 +209,6 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
                 msg_type = str(type(task_message))
                 msg = f"Unknown message type {msg_type} received with subtask_id: {subtask_id} : {body}"
                 self.log(msg, "ERROR")
-
-            pending_tasks = send_pending_subtasks()
 
     def send_task(self, subtask_id, task_payload):
         """
