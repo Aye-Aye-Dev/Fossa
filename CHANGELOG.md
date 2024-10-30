@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - nothing
 
+## [0.0.37] - 2024-10-30
+### Fixed
+- race condition - new iterator ->  queue thread was completing it's work before queue was checked for results so subtasks weren't being run.
+
 ## [0.0.36] - 2024-10-29
 ### Fixed
 - iterators block so need to put tasks into a queue which can be read in non-blocking mode for RabbitMq

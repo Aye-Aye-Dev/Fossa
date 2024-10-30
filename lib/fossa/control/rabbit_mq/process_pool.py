@@ -76,15 +76,15 @@ class RabbitMqProcessPool(AbstractProcessPool, LoggingMixin):
             i.e. the `sub_tasks` iterator hassn't been exhausted.
             """
             while len(self.tasks_in_flight) < max_in_flight:
-                if not sub_tasks_thread.is_alive():
-                    # the iterator in the thread has been exhausted so no more tasks coming
-                    return False
-
                 try:
                     sub_task = subtasks_queue.get(block=False, timeout=1)
                 except queue.Empty:
-                    # There are probably more tasks to come
-                    return True
+                    if sub_tasks_thread.is_alive():
+                        # There are probably more tasks to come
+                        return True
+
+                    # the iterator in the thread has been exhausted so no more tasks coming
+                    return False
 
                 subtask_id = f"{self.pool_id}:{self.subtask_number}"
                 self.subtask_number += 1
